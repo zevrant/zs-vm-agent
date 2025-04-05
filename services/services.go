@@ -7,6 +7,7 @@ var filesystemService FileSystemServiceImpl
 
 func Initialize(logger *logrus.Logger) {
 	diskService.initialize(logger)
+	filesystemService.initialize(logger)
 }
 
 func GetDiskService() DiskService {

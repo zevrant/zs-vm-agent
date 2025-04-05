@@ -44,7 +44,7 @@ func (filesystemService *FileSystemServiceImpl) GetFilesystem(disk *disk.Disk, p
 	table, getPartitionsError := disk.GetPartitionTable()
 
 	if getPartitionsError != nil {
-		filesystemService.logger.Errorf("Failed to retrieve disk partitions: %s", getPartitionsError)
+		filesystemService.logger.Errorf("Failed to retrieve disk partitions: %s", getPartitionsError.Error())
 		return nil, getPartitionsError
 	}
 
