@@ -10,7 +10,7 @@ import (
 )
 
 var templateMap map[string]func(logger *logrus.Logger) error = map[string]func(logger *logrus.Logger) error{
-	"loadbalancer": loadbalancer.SetupLoadbalancer,
+	"loadbalancer": loadbalancer.SetupLoadBalancer,
 }
 
 func main() {

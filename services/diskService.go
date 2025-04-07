@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/diskfs/go-diskfs"
 	"github.com/diskfs/go-diskfs/disk"
@@ -23,16 +24,19 @@ func (diskService *DiskServiceImpl) initialize(logger *logrus.Logger) {
 }
 
 func (diskService *DiskServiceImpl) MountPartition(partitionPath string, mountLocation string) error {
-	command := exec.Command("mount", "-c", "/usr/bin/mount", partitionPath, mountLocation)
-
-	output, executionError := command.Output()
-
+	diskService.logger.Debugf("Mounting device %s at %s", partitionPath, mountLocation)
+	diskService.logger.Debugf("/usr/bin/mount ID=%s %s", partitionPath, mountLocation)
+	command := exec.Command("/usr/bin/mount", fmt.Sprintf("ID=%s", partitionPath), mountLocation)
+	//command := exec.Command("whoami")
+	var output bytes.Buffer
+	command.Stdout = &output
+	command.Stderr = &output
+	executionError := command.Run()
+	diskService.logger.Debug(string(output.Bytes()))
 	if executionError != nil {
 		diskService.logger.Errorf("Failed to execute mount, %s", executionError.Error())
 		return executionError
 	}
-
-	fmt.Println(output)
 
 	return nil
 }

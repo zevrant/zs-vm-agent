@@ -2,10 +2,13 @@ module zs-vm-agent
 
 go 1.23.4
 
-require github.com/sirupsen/logrus v1.9.4-0.20230606125235-dd1b4c2e81af
+require (
+	github.com/blang/vfs v1.0.0
+	github.com/diskfs/go-diskfs v1.5.2
+	github.com/sirupsen/logrus v1.9.4-0.20230606125235-dd1b4c2e81af
+)
 
 require (
-	github.com/diskfs/go-diskfs v1.5.2 // indirect
 	github.com/djherbis/times v1.6.0 // indirect
 	github.com/elliotwutingfeng/asciiset v0.0.0-20230602022725-51bbb787efab // indirect
 	github.com/google/uuid v1.3.0 // indirect
