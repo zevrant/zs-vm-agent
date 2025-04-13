@@ -1,13 +1,25 @@
 package loadbalancer
 
 import (
+	"encoding/json"
 	"errors"
-	"github.com/diskfs/go-diskfs/filesystem"
 	"github.com/sirupsen/logrus"
+	"zs-vm-agent/clients"
 	"zs-vm-agent/services"
 )
 
-func SetupLoadBalancer(logger *logrus.Logger) error {
+var systemServices = [...]string{
+	"keepalived",
+	"haproxy",
+}
+
+type fileMapping struct {
+	path                      string
+	permissions               int
+	directoryFilesPermissions int
+}
+
+func SetupLoadBalancer(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
 	logger.Info("Setting up as load balancer")
 	var diskService services.DiskService = services.GetDiskService()
 	var fileSystemService services.FileSystemService = services.GetFileSystemService()
@@ -18,6 +30,12 @@ func SetupLoadBalancer(logger *logrus.Logger) error {
 		return nil
 	}
 	logger.Info("Files successfully loaded")
+
+	configurationError := performPrerunConfiguration(logger)
+
+	if configurationError != nil {
+		return configurationError
+	}
 
 	startServicesError := startServices(logger)
 
@@ -34,20 +52,6 @@ func SetupLoadBalancer(logger *logrus.Logger) error {
 	return nil
 }
 
-func mountDisks(diskService services.DiskService) error {
-	mountHaproxyConfigError := diskService.MountPartition("scsi-0QEMU_QEMU_HARDDISK_drive-scsi1", "/var/run/zevrant-services/haproxy/")
-	if mountHaproxyConfigError != nil {
-		return mountHaproxyConfigError
-	}
-
-	mountKeepalivedConfigError := diskService.MountPartition("scsi-0QEMU_QEMU_HARDDISK_drive-scsi2", "/etc/keepalived/")
-
-	if mountKeepalivedConfigError != nil {
-		return mountHaproxyConfigError
-	}
-
-	return nil
-}
 func initializeFileSystem(logger *logrus.Logger, diskService services.DiskService, filesystemService services.FileSystemService) error {
 	fs, getFileSystemError := filesystemService.GetBlockFilesystem("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1")
 
@@ -55,86 +59,126 @@ func initializeFileSystem(logger *logrus.Logger, diskService services.DiskServic
 		return getFileSystemError
 	}
 
-	dirs := []string{
-		"/etc/haproxy/conf.d",
-		"/etc/haproxy/certs",
-		"/var/run/zevrant-services/haproxy",
-	}
-	directoryCreationError := createRootFsDirectories(dirs, filesystemService)
-
-	if directoryCreationError != nil {
-		return directoryCreationError
+	dirs := map[string]int{
+		"/etc/haproxy":        0755,
+		"/etc/haproxy/conf.d": 0755,
+		"/etc/haproxy/certs":  0700,
 	}
 
-	setOwnerError := filesystemService.SetRootFsFileOwner("/etc/haproxy", "haproxy", true)
+	for directory, permissions := range dirs {
+		directoryCreationError := filesystemService.CreateRootFsDirectory(directory, true, permissions)
 
-	if setOwnerError != nil {
-		return setOwnerError
+		if directoryCreationError != nil {
+			return directoryCreationError
+		}
+
+		setOwnerError := filesystemService.SetRootFsOwner(directory, "haproxy", false)
+
+		if setOwnerError != nil {
+			return setOwnerError
+		}
 	}
 
-	setPermissionsError := filesystemService.SetRootFsFilePermissions("/etc/haproxy/certs/", 0600, true)
-
-	if setPermissionsError != nil {
-		return setPermissionsError
-	}
-
-	copyFilesError := copyFiles(fs, map[string]string{
-		"haproxy.cfg": "/etc/haproxy/haproxy.cfg",
-		"certs":       "/etc/haproxy/certs",
-		"conf.d":      "/etc/haproxy/conf.d/",
+	copyFilesError := copyFiles(fs, map[string]fileMapping{
+		"haproxy.cfg": {
+			path:        "/etc/haproxy/haproxy.cfg",
+			permissions: 0755,
+		},
+		"certs": {
+			path:                      "/etc/haproxy/certs",
+			permissions:               0600,
+			directoryFilesPermissions: 0600,
+		},
+		"conf.d": {
+			path:                      "/etc/haproxy/conf.d/",
+			permissions:               0755,
+			directoryFilesPermissions: 0644,
+		},
+		"vm-config.json": {
+			path:        "/tmp/vm-config.json",
+			permissions: 0400,
+		},
 	})
 
 	if copyFilesError != nil {
 		return copyFilesError
 	}
 
+	fs, getFileSystemError = filesystemService.GetBlockFilesystem("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi2")
+
+	if getFileSystemError != nil {
+		return getFileSystemError
+	}
+
+	copyFilesError = copyFiles(fs, map[string]fileMapping{
+		"keepalived.conf": {
+			path:        "/etc/keepalived/keepalived.conf",
+			permissions: 0600,
+		},
+	})
+
+	if copyFilesError != nil {
+		return copyFilesError
+	}
+
+	selinuxService := services.GetSeLinuxService()
+
+	changeContextError := selinuxService.ChangeContext("/etc/haproxy", "system_u", "object_r", "etc_t", true)
+
+	if changeContextError != nil {
+		return changeContextError
+	}
+
+	changeContextError = selinuxService.ChangeContext("/etc/keepalived", "system_u", "object_r", "keepalived_var_run_t", true)
+
+	if changeContextError != nil {
+		return changeContextError
+	}
+
 	return nil
 }
 
-func createRootFsDirectories(dirs []string, filesystemService services.FileSystemService) error {
-	for _, directory := range dirs {
-		setPermissionsError := filesystemService.CreateRootFsDirectory(directory, true)
+func copyFiles(sourceFs clients.FileSystemWrapper, sources map[string]fileMapping) error {
+	filesystemService := services.GetFileSystemService()
+	for sourceFile, destFile := range sources {
+		copyError := filesystemService.CopyFilesToRootFs(sourceFs, sourceFile, destFile.path, true)
+		if copyError != nil {
+			return copyError
+		}
+		setPermissionsError := filesystemService.SetRootFsPermissions(destFile.path, destFile.directoryFilesPermissions, true)
 
 		if setPermissionsError != nil {
 			return setPermissionsError
 		}
-	}
-	return nil
-}
 
-func copyFiles(sourceFs filesystem.FileSystem, sources map[string]string) error {
-	for sourceFile, destFile := range sources {
-		copyError := services.GetFileSystemService().CopyFilesToRootFs(sourceFs, sourceFile, destFile, true)
-		if copyError != nil {
-			return copyError
+		setPermissionsError = filesystemService.SetRootFsPermissions(destFile.path, destFile.permissions, false)
+
+		if setPermissionsError != nil {
+			return setPermissionsError
 		}
+
 	}
 	return nil
 }
 
 func startServices(logger *logrus.Logger) error {
+
 	systemdService := services.GetSystemdService()
 
-	logger.Info("Starting service keepalived")
-	startKeepalivedError := systemdService.StartService("keepalived")
+	for _, service := range systemServices {
+		logger.Infof("Starting service %s", service)
+		startServiceError := systemdService.StartService(service)
 
-	if startKeepalivedError != nil {
-		return startKeepalivedError
-	}
-	logger.Info("Keepalived successfully started")
-
-	logger.Info("Starting service haproxy")
-	startHaproxyError := systemdService.StartService("haproxy")
-	if startHaproxyError != nil {
-		return startHaproxyError
+		if startServiceError != nil {
+			return startServiceError
+		}
+		logger.Infof("%s successfully started", service)
 	}
 
-	logger.Info("Haproxy successfully started")
 	return nil
 }
 
 func checkServicesHealth(logger *logrus.Logger) error {
-	systemServices := []string{"haproxy", "keepalived"}
 	systemdService := services.GetSystemdService()
 
 	for _, service := range systemServices {
@@ -152,4 +196,38 @@ func checkServicesHealth(logger *logrus.Logger) error {
 		}
 	}
 	return nil
+}
+
+func performPrerunConfiguration(logger *logrus.Logger) error {
+	contents, getFileContentsError := services.GetFileSystemService().ReadFileContents("/tmp/vm-config.json")
+
+	if getFileContentsError != nil {
+		return getFileContentsError
+	}
+
+	var config loadbalancerConfig
+
+	jsonError := json.Unmarshal(contents, &config)
+
+	if jsonError != nil {
+		logger.Errorf("Failed to parse vm-configuration json: %s", jsonError.Error())
+		return jsonError
+	}
+
+	for _, port := range config.ports {
+		openPortError := services.GetSeLinuxService().OpenInboundPort(port.port, port.protocol)
+		if openPortError != nil {
+			return openPortError
+		}
+	}
+	return nil
+}
+
+type loadbalancerConfig struct {
+	ports []portMapping
+}
+
+type portMapping struct {
+	port     int
+	protocol string
 }

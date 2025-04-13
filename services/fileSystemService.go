@@ -4,49 +4,47 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/diskfs/go-diskfs"
-	"github.com/diskfs/go-diskfs/disk"
 	"github.com/diskfs/go-diskfs/filesystem"
 	"github.com/sirupsen/logrus"
 	"os"
+	"strconv"
 	"strings"
+	"syscall"
+	"zs-vm-agent/clients"
 )
 
 type FileSystemService interface {
-	initialize(logger *logrus.Logger)
-	CreateRootFsDirectory(path string, recursive bool) error
-	SetRootFsFileOwner(path string, owner string, recursive bool) error
-	SetRootFsFilePermissions(path string, permissions int, recursive bool) error
-	GetFilesystem(disk *disk.Disk, partition int) (filesystem.FileSystem, error)
-	GetBlockFilesystem(devicePath string) (filesystem.FileSystem, error)
-	CopyFilesToRootFs(sourceFilesystem filesystem.FileSystem, sourcePath string, destPath string, recursive bool) error
+	initialize(logger *logrus.Logger, osClient clients.OsClient, userClient clients.UserClient)
+	CreateRootFsDirectory(path string, recursive bool, permissions int) error
+	SetRootFsOwner(path string, owner string, recursive bool) error
+	SetRootFsPermissions(path string, permissions int, recursive bool) error
+	GetFilesystem(diskWrapper clients.DiskWrapper, partition int) (clients.FileSystemWrapper, error)
+	GetBlockFilesystem(devicePath string) (clients.FileSystemWrapper, error)
+	CopyFilesToRootFs(sourceFilesystem clients.FileSystemWrapper, sourcePath string, destPath string, recursive bool) error
+	ReadFileContents(path string) ([]byte, error)
 }
 
 type FileSystemServiceImpl struct {
-	logger *logrus.Logger
+	logger     *logrus.Logger
+	osClient   clients.OsClient
+	userClient clients.UserClient
 }
 
-func (filesystemService *FileSystemServiceImpl) initialize(logger *logrus.Logger) {
+func (filesystemService *FileSystemServiceImpl) initialize(logger *logrus.Logger, osClient clients.OsClient, userClient clients.UserClient) {
 	filesystemService.logger = logger
+	filesystemService.osClient = osClient
+	filesystemService.userClient = userClient
 }
 
-func (filesystemService *FileSystemServiceImpl) CreateRootFsDirectory(path string, recursive bool) error {
+func (filesystemService *FileSystemServiceImpl) CreateRootFsDirectory(path string, recursive bool, permissions int) error {
 	var pathParts []string = strings.Split(path, "/")
 	var currentPath = ""
 	for _, pathPart := range pathParts {
 		currentPath = strings.Replace(fmt.Sprintf("%s%s/", currentPath, pathPart), "//", "/", -1)
-		_, readDirectoryError := os.Stat(currentPath)
-
-		if readDirectoryError != nil {
-			expectedErrorString := fmt.Sprintf("stat %s: no such file or directory", currentPath)
-			filesystemService.logger.Debugf("%s == %s", readDirectoryError.Error(), expectedErrorString)
-			if readDirectoryError.Error() == expectedErrorString {
-				filesystemService.logger.Debugf("true")
-			}
-		}
+		_, readDirectoryError := filesystemService.osClient.StatFile(currentPath)
 
 		if readDirectoryError != nil && readDirectoryError.Error() == fmt.Sprintf("stat %s: no such file or directory", currentPath) && (recursive || strings.Contains(currentPath, path)) {
-			createDirectoryError := os.Mkdir(currentPath, 0755)
+			createDirectoryError := filesystemService.osClient.Mkdir(currentPath, permissions)
 			if createDirectoryError != nil {
 				filesystemService.logger.Errorf("Failed to create directory %s: %s", currentPath, createDirectoryError.Error())
 				return createDirectoryError
@@ -61,60 +59,69 @@ func (filesystemService *FileSystemServiceImpl) CreateRootFsDirectory(path strin
 	return nil
 }
 
-func (filesystemService *FileSystemServiceImpl) SetRootFsFileOwner(path string, owner string, recursive bool) error {
+func (filesystemService *FileSystemServiceImpl) SetRootFsPermissions(path string, permissions int, recursive bool) error {
+	fileInfo, getDirectoryInfoError := filesystemService.osClient.StatFile(path)
+
+	if getDirectoryInfoError != nil {
+		filesystemService.logger.Errorf("Failed to retrieve directory %s before updating permissions: %s", path, getDirectoryInfoError.Error())
+		return getDirectoryInfoError
+	}
+
+	if fileInfo.IsDir() && recursive {
+		directoryEntries, readDirectoryError := filesystemService.osClient.ReadDir(path)
+		if readDirectoryError != nil {
+			filesystemService.logger.Errorf("Failed to read directory for recursive ownership change %s: %s", path, readDirectoryError)
+			return readDirectoryError
+		}
+		for _, entry := range directoryEntries {
+			setOwnerError := filesystemService.SetRootFsPermissions(strings.Replace(fmt.Sprintf("%s/%s", path, entry.Name()), "//", "/", -1), permissions, recursive)
+			if setOwnerError != nil {
+				return setOwnerError
+			}
+		}
+	}
+	setPermissionsError := filesystemService.osClient.SetPermissions(path, permissions)
+
+	if setPermissionsError != nil {
+		filesystemService.logger.Errorf("Failed to set permissions on %s: %s", path, setPermissionsError.Error())
+		return setPermissionsError
+	}
+
 	return nil
 }
 
-func (filesystemService *FileSystemServiceImpl) SetRootFsFilePermissions(path string, permissions int, recursive bool) error {
-	return nil
-}
-
-func (filesystemService *FileSystemServiceImpl) GetFilesystem(disk *disk.Disk, partition int) (filesystem.FileSystem, error) {
-	if disk == nil {
+func (filesystemService *FileSystemServiceImpl) GetFilesystem(diskWrapper clients.DiskWrapper, partition int) (clients.FileSystemWrapper, error) {
+	if diskWrapper == nil {
 		filesystemService.logger.Error("Disk provided was nil")
 		return nil, errors.New("cannot get filesystem from nil disk pointer")
 	}
-	table, getPartitionsError := disk.GetPartitionTable()
 
-	if getPartitionsError != nil {
-		filesystemService.logger.Errorf("Failed to retrieve disk partitions: %s", getPartitionsError.Error())
-		return nil, getPartitionsError
-	}
+	fileSystem, getFileSystemError := diskWrapper.GetFileSystem(partition)
 
-	for _, diskPart := range table.GetPartitions() {
-		filesystemService.logger.Debugf("Partition %s found", diskPart.UUID())
-	}
-
-	fileSystem, getFileSystemError := disk.GetFilesystem(partition)
-
-	fileinfo, _ := disk.Backend.Stat()
 	if getFileSystemError != nil {
-		filesystemService.logger.Errorf("Failed to retrieve file system from disk %s at partition %d", fileinfo.Name(), partition)
+		filesystemService.logger.Errorf("Failed to retrieve file system from disk at partition %d", partition)
 		return nil, getFileSystemError
 	}
 
-	fileInfos, readDirError := fileSystem.ReadDir("/")
+	_, readDirError := fileSystem.ReadDir("/")
 
 	if readDirError != nil {
 		filesystemService.logger.Errorf("Failed to read filesystem: %s", readDirError.Error())
-	}
-
-	for _, file := range fileInfos {
-		filesystemService.logger.Debugf(file.Name())
+		return nil, readDirError
 	}
 
 	return fileSystem, nil
 }
 
-func (filesystemService *FileSystemServiceImpl) GetBlockFilesystem(devicePath string) (filesystem.FileSystem, error) {
-	blockDevice, getDeviceError := diskfs.Open(devicePath)
+func (filesystemService *FileSystemServiceImpl) GetBlockFilesystem(devicePath string) (clients.FileSystemWrapper, error) {
+	blockDevice, getDeviceError := filesystemService.osClient.OpenDisk(devicePath)
 
 	if getDeviceError != nil {
 		filesystemService.logger.Errorf("Failed to retrieve block device at specified path %s: %s", devicePath, getDeviceError.Error())
 		return nil, getDeviceError
 	}
 
-	blockFilesystem, getBlockFilesystemError := blockDevice.GetFilesystem(0) //no partition table so 0th partition
+	blockFilesystem, getBlockFilesystemError := blockDevice.GetFileSystem(0) //no partition table so 0th partition
 
 	if getBlockFilesystemError != nil {
 		filesystemService.logger.Errorf("Failed to retrieve filesystem from block device %s: %s", devicePath, getBlockFilesystemError.Error())
@@ -125,7 +132,7 @@ func (filesystemService *FileSystemServiceImpl) GetBlockFilesystem(devicePath st
 	return blockFilesystem, nil
 }
 
-func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesystem filesystem.FileSystem, sourcePath string, destPath string, recursive bool) error {
+func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesystem clients.FileSystemWrapper, sourcePath string, destPath string, recursive bool) error {
 	var sourceFile filesystem.File
 	localSourcePath := sourcePath
 	fileInfos, readSourceError := filesystemService.attemptReadDir(sourceFilesystem, sourcePath)
@@ -141,7 +148,7 @@ func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesyst
 			return getFileInfoError
 		}
 		fileInfos = []os.FileInfo{fileInfo}
-		localSourcePath = *newDestPath
+		localSourcePath, _ = strings.CutPrefix(*newDestPath, "/")
 	}
 	for _, fileInfo := range fileInfos {
 		if fileInfo.IsDir() && (fileInfo.Name() != "." && fileInfo.Name() != "..") {
@@ -166,7 +173,7 @@ func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesyst
 	return nil
 }
 
-func (filesystemService *FileSystemServiceImpl) attemptReadDir(sourceFilesystem filesystem.FileSystem, sourcePath string) ([]os.FileInfo, error) {
+func (filesystemService *FileSystemServiceImpl) attemptReadDir(sourceFilesystem clients.FileSystemWrapper, sourcePath string) ([]os.FileInfo, error) {
 	fileInfos, readSourceError := sourceFilesystem.ReadDir(sourcePath)
 	expectedErrorMessage := fmt.Sprintf("error reading directory %s: cannot create directory at /%s since it is a file", sourcePath, sourcePath)
 	if readSourceError != nil && readSourceError.Error() == expectedErrorMessage {
@@ -193,12 +200,17 @@ func (filesystemService *FileSystemServiceImpl) copySingleFileToRootFs(sourceFil
 		fileBytes = make([]byte, 4096)
 		bytesRead, readBytesError = sourceFile.Read(fileBytes)
 	}
-	osFile, createFileError := os.Create(destPath)
+	osFile, createFileError := filesystemService.osClient.CreateFile(destPath)
 	if createFileError != nil && strings.Contains(createFileError.Error(), "is a directory") {
 		osFile, createFileError = os.Create(fmt.Sprintf("%s/%s", destPath, sourceFileName))
 	} else if createFileError != nil {
 		filesystemService.logger.Errorf("Failed to create file to copy source to %s: %s", destPath, createFileError.Error())
 		return createFileError
+	}
+
+	if osFile == nil {
+		filesystemService.logger.Errorf("Failed to retrieve file to copy source to: %s, file was nil", destPath)
+		return errors.New(fmt.Sprintf("Failed to retrieve file to copy source to: %s, file was nil", destPath))
 	}
 
 	bytesWritten, writeFileError := osFile.Write(fileBuffer.Bytes())
@@ -216,7 +228,7 @@ func (filesystemService *FileSystemServiceImpl) copySingleFileToRootFs(sourceFil
 	return nil
 }
 
-func (filesystemService *FileSystemServiceImpl) getSingleFileInfo(system filesystem.FileSystem, sourcePath string, destPath string) (os.FileInfo, *string, error) {
+func (filesystemService *FileSystemServiceImpl) getSingleFileInfo(system clients.FileSystemWrapper, sourcePath string, destPath string) (os.FileInfo, *string, error) {
 	pathParts := strings.Split(destPath, "/")
 	localDestPath := ""
 	for i, part := range pathParts {
@@ -254,4 +266,83 @@ func (filesystemService *FileSystemServiceImpl) getSingleFileInfo(system filesys
 		return nil, nil, errors.New(fmt.Sprintf("file %s could not be found", sourcePath))
 	}
 	return sourceFile, &sourceDir, nil
+}
+
+func (filesystemService *FileSystemServiceImpl) SetRootFsOwner(path string, owner string, recursive bool) error {
+	directoryInfo, getDirectoryInfoError := filesystemService.osClient.StatFile(path)
+
+	if getDirectoryInfoError != nil {
+		filesystemService.logger.Errorf("Failed to retrieve directory %s before updating ownership: %s", path, getDirectoryInfoError.Error())
+		return getDirectoryInfoError
+	}
+
+	if directoryInfo.IsDir() && recursive {
+		directoryEntries, readDirectoryError := filesystemService.osClient.ReadDir(path)
+		if readDirectoryError != nil {
+			filesystemService.logger.Errorf("Failed to read directory for recursive ownership change %s: %s", path, readDirectoryError)
+			return readDirectoryError
+		}
+		for _, entry := range directoryEntries {
+			setOwnerError := filesystemService.SetRootFsOwner(strings.Replace(fmt.Sprintf("%s/%s", path, entry.Name()), "//", "/", -1), owner, recursive)
+			if setOwnerError != nil {
+				return setOwnerError
+			}
+		}
+	}
+
+	fileSys := directoryInfo.Sys().(*syscall.Stat_t)
+
+	directoryGuid := fmt.Sprint(fileSys.Gid)
+
+	guid, guidConversionError := strconv.Atoi(directoryGuid)
+
+	if guidConversionError != nil {
+		filesystemService.logger.Errorf("Failed to convert guid string %s to integer: %s", directoryGuid, guidConversionError)
+		return guidConversionError
+	}
+
+	ownerUser, getUserUidError := filesystemService.userClient.GetUserByName(owner)
+
+	if getUserUidError != nil {
+		filesystemService.logger.Errorf("Failed to retrieve UID for user %s: %s", owner, getUserUidError.Error())
+		return getUserUidError
+	}
+
+	uid, uidConversionError := strconv.Atoi(ownerUser.Uid)
+
+	if uidConversionError != nil {
+		filesystemService.logger.Errorf("Failed to convert uid string %s to integer: %s", ownerUser.Uid, uidConversionError)
+		return uidConversionError
+	}
+
+	setOwnerError := filesystemService.osClient.SetOwner(path, uid, guid)
+	if setOwnerError != nil {
+		logrus.Errorf("Failed to set owner for %s: %s", path, setOwnerError)
+		return setOwnerError
+	}
+	return nil
+}
+
+func (filesystemService *FileSystemServiceImpl) ReadFileContents(path string) ([]byte, error) {
+	file, getFileError := filesystemService.osClient.OpenFile(path)
+	if getFileError != nil {
+		filesystemService.logger.Errorf("Failed to open file at %s: %s", path, getFileError.Error())
+		return nil, getFileError
+	}
+	var byteSlice []byte
+	var fileBuffer bytes.Buffer
+	bytesRead, readError := file.Read(byteSlice)
+
+	for bytesRead > 0 {
+		if readError != nil {
+			filesystemService.logger.Errorf("Error occured while reading from file %s: %s", path, readError.Error())
+		}
+
+		for i := range bytesRead {
+			fileBuffer.WriteByte(byteSlice[i])
+		}
+		bytesRead, readError = file.Read(byteSlice)
+	}
+
+	return fileBuffer.Bytes(), nil
 }

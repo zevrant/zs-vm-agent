@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+//TODO: Hook into systemd and journal directly rather than forking commands
+
 type SystemdService interface {
 	initialize(logger *logrus.Logger)
 	StartService(serviceName string) error

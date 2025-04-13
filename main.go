@@ -9,7 +9,7 @@ import (
 	"zs-vm-agent/services"
 )
 
-var templateMap map[string]func(logger *logrus.Logger) error = map[string]func(logger *logrus.Logger) error{
+var templateMap = map[string]func(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error{
 	"loadbalancer": loadbalancer.SetupLoadBalancer,
 }
 
@@ -21,12 +21,12 @@ func main() {
 	logger.Info("Initializing Services")
 	services.Initialize(logger)
 
-	tags, _ := clients.GetInfraConfigMapperClient().GetTagsByHostname()
+	vmDetails, _ := clients.GetInfraConfigMapperClient().GetVmDetailsByHostname()
 
-	for _, tag := range tags {
+	for _, tag := range vmDetails.Tags {
 		val, okay := templateMap[tag]
 		if okay {
-			err := val(logger)
+			err := val(logger, vmDetails)
 			if err != nil {
 				return
 			}
