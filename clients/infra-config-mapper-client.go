@@ -11,7 +11,7 @@ import (
 type InfraConfigMapperClient interface {
 	initialize(logger *logrus.Logger)
 	GetTagsByHostname() ([]string, error)
-	GetVmDetailsByHostname() (ProxmoxVm, error)
+	GetVmDetailsByHostname() (*ProxmoxVm, error)
 }
 
 type InfraConfigMapperClientImpl struct {
@@ -57,7 +57,7 @@ func (infraMapperClient *InfraConfigMapperClientImpl) GetTagsByHostname() ([]str
 	return parsedResponse, nil
 }
 
-func (infraMapperClient *InfraConfigMapperClientImpl) GetVmDetailsByHostname() ([]string, error) {
+func (infraMapperClient *InfraConfigMapperClientImpl) GetVmDetailsByHostname() (*ProxmoxVm, error) {
 	request, requestCreationError := http.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf("%s/state/vm/%s", infraMapperClient.configMapperUrl, infraMapperClient.httpClient.hostURL),
@@ -75,7 +75,7 @@ func (infraMapperClient *InfraConfigMapperClientImpl) GetVmDetailsByHostname() (
 		return nil, getIdentityError
 	}
 
-	var parsedResponse []string
+	var parsedResponse ProxmoxVm
 
 	jsonProcessingError := json.Unmarshal(response, &parsedResponse)
 
@@ -84,7 +84,7 @@ func (infraMapperClient *InfraConfigMapperClientImpl) GetVmDetailsByHostname() (
 		return nil, jsonProcessingError
 	}
 
-	return parsedResponse, nil
+	return &parsedResponse, nil
 }
 
 type ProxmoxVm struct {

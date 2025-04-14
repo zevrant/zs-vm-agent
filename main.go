@@ -26,7 +26,7 @@ func main() {
 	for _, tag := range vmDetails.Tags {
 		val, okay := templateMap[tag]
 		if okay {
-			err := val(logger, vmDetails)
+			err := val(logger, *vmDetails)
 			if err != nil {
 				return
 			}
