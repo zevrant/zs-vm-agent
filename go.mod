@@ -1,6 +1,6 @@
 module zs-vm-agent
 
-go 1.23.4
+go 1.22.9
 
 require (
 	github.com/diskfs/go-diskfs v1.5.2
