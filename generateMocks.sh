@@ -23,3 +23,8 @@ mockgen -source=clients/diskWrapper.go -destination=clients/diskWrapper_mock.go
 sed -i 's/package mock_clients/package clients/g' clients/diskWrapper_mock.go
 sed -i 's/clients\.//g' clients/diskWrapper_mock.go
 sed -i 's~clients "zs-vm-agent/clients"~~g' clients/diskWrapper_mock.go
+
+mockgen -source=clients/userClient.go -destination=clients/userClient_mock.go
+sed -i 's/package mock_clients/package clients/g' clients/userClient_mock.go
+sed -i 's/clients\.//g' clients/userClient_mock.go
+sed -i 's~clients "zs-vm-agent/clients"~~g' clients/userClient_mock.go

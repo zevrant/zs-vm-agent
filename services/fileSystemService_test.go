@@ -3,30 +3,31 @@ package services
 import (
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 	"os"
 	"testing"
 	"zs-vm-agent/clients"
+
+	"github.com/golang/mock/gomock"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFileSystemServiceImpl_CreateRootFsDirectory_alreadyExists(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOsClient := clients.NewMockOsClient(ctrl)
-
+	mockUserClient := clients.NewMockUserClient(ctrl)
 	testPath := "testPath"
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient)
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
 	mockOsClient.
 		EXPECT().
 		StatFile(gomock.Eq(testPath+"/")).
 		Times(1).
 		Return(nil, nil)
 
-	createRootFsDirError := testFilesystemService.CreateRootFsDirectory(testPath, false)
+	createRootFsDirError := testFilesystemService.CreateRootFsDirectory(testPath, false, 0700)
 
 	assert.Nil(t, createRootFsDirError)
 }
@@ -35,11 +36,11 @@ func TestFileSystemServiceImpl_CreateRootFsDirectory_readFailed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOsClient := clients.NewMockOsClient(ctrl)
-
+	mockUserClient := clients.NewMockUserClient(ctrl)
 	testPath := "testPath"
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient)
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
 
 	testError := errors.New("failed to read directory")
 
@@ -49,7 +50,7 @@ func TestFileSystemServiceImpl_CreateRootFsDirectory_readFailed(t *testing.T) {
 		Times(1).
 		Return(nil, testError)
 
-	createRootFsDirError := testFilesystemService.CreateRootFsDirectory(testPath, false)
+	createRootFsDirError := testFilesystemService.CreateRootFsDirectory(testPath, false, 0700)
 
 	assert.ErrorIs(t, createRootFsDirError, testError)
 }
@@ -59,11 +60,12 @@ func TestFileSystemServiceImpl_CreateRootFsDirectory_doesntExist(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockUserClient := clients.NewMockUserClient(ctrl)
 
 	testPath := "testPath"
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient)
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
 	mockOsClient.
 		EXPECT().
 		StatFile(gomock.Eq(testPath+"/")).
@@ -72,11 +74,11 @@ func TestFileSystemServiceImpl_CreateRootFsDirectory_doesntExist(t *testing.T) {
 
 	mockOsClient.
 		EXPECT().
-		Mkdir(gomock.Eq(fmt.Sprintf("%s/", testPath)), gomock.Eq(0755)).
+		Mkdir(gomock.Eq(fmt.Sprintf("%s/", testPath)), gomock.Eq(0700)).
 		Times(1).
 		Return(nil)
 
-	createRootFsDirError := testFilesystemService.CreateRootFsDirectory(testPath, false)
+	createRootFsDirError := testFilesystemService.CreateRootFsDirectory(testPath, false, 0700)
 
 	assert.Nil(t, createRootFsDirError)
 }
@@ -86,16 +88,17 @@ func TestFileSystemServiceImpl_CreateRootFsDirectory_doesntExist_createFailed(t 
 	defer ctrl.Finish()
 
 	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockUserClient := clients.NewMockUserClient(ctrl)
 
 	testPath := "testPath"
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient)
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
 	mockOsClient.
 		EXPECT().
 		StatFile(gomock.Eq(testPath+"/")).
 		Times(1).
-		Return(nil, errors.New(fmt.Sprintf("stat %s/: no such file or directory", testPath)))
+		Return(nil, fmt.Errorf("stat %s/: no such file or directory", testPath))
 
 	testError := errors.New("i failed")
 
@@ -105,7 +108,7 @@ func TestFileSystemServiceImpl_CreateRootFsDirectory_doesntExist_createFailed(t 
 		Times(1).
 		Return(testError)
 
-	createRootFsDirError := testFilesystemService.CreateRootFsDirectory(testPath, false)
+	createRootFsDirError := testFilesystemService.CreateRootFsDirectory(testPath, false, 0755)
 
 	assert.ErrorIs(t, createRootFsDirError, testError)
 }
@@ -126,7 +129,7 @@ func TestFileSystemServiceImpl_GetFilesystem(t *testing.T) {
 	mockDiskWrapper.EXPECT().GetFileSystem(gomock.Eq(testPartitionNumber)).Return(mockFileSystemWrapper, nil)
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, nil)
+	testFilesystemService.initialize(&logrus.Logger{}, nil, nil)
 
 	retrievedFilesystem, getFilesystemError := testFilesystemService.GetFilesystem(mockDiskWrapper, testPartitionNumber)
 
@@ -151,7 +154,7 @@ func TestFileSystemServiceImpl_GetFilesystem_UnableToRead(t *testing.T) {
 	mockDiskWrapper.EXPECT().GetFileSystem(gomock.Eq(testPartitionNumber)).Return(mockFileSystemWrapper, nil)
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, nil)
+	testFilesystemService.initialize(&logrus.Logger{}, nil, nil)
 
 	retrievedFilesystem, getFilesystemError := testFilesystemService.GetFilesystem(mockDiskWrapper, testPartitionNumber)
 
@@ -181,7 +184,7 @@ func TestFileSystemServiceImpl_GetFilesystem_FailedToGetFileSystem(t *testing.T)
 	mockDiskWrapper.EXPECT().GetFileSystem(gomock.Eq(testPartitionNumber)).Return(nil, getFileSystemTestError)
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, nil)
+	testFilesystemService.initialize(&logrus.Logger{}, nil, nil)
 
 	retrievedFilesystem, getFilesystemError := testFilesystemService.GetFilesystem(mockDiskWrapper, testPartitionNumber)
 
@@ -207,7 +210,7 @@ func TestFileSystemServiceImpl_GetFilesystem_NilDisk(t *testing.T) {
 	mockFileSystem.EXPECT().ReadDir(gomock.Eq("/")).Times(0)
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, nil)
+	testFilesystemService.initialize(&logrus.Logger{}, nil, nil)
 
 	retrievedFilesystem, getFilesystemError := testFilesystemService.GetFilesystem(nil, testPartitionNumber)
 
@@ -222,6 +225,7 @@ func TestFileSystemServiceImpl_GetBlockFilesystem(t *testing.T) {
 	testPath := "testPath"
 
 	mockFileSystemWrapper := clients.NewMockFileSystemWrapper(ctrl)
+	mockUserClient := clients.NewMockUserClient(ctrl)
 
 	mockDiskWrapper := clients.NewMockDiskWrapper(ctrl)
 	mockDiskWrapper.EXPECT().GetFileSystem(gomock.Eq(0)).Times(1).Return(mockFileSystemWrapper, nil)
@@ -230,7 +234,7 @@ func TestFileSystemServiceImpl_GetBlockFilesystem(t *testing.T) {
 	mockOsClient.EXPECT().OpenDisk(gomock.Eq(testPath)).Times(1).Return(mockDiskWrapper, nil)
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient)
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
 
 	retrievedFilesystem, getFilesystemError := testFilesystemService.GetBlockFilesystem(testPath)
 
@@ -246,6 +250,8 @@ func TestFileSystemServiceImpl_GetBlockFilesystem_FailedGetFilesystem(t *testing
 	testPath := "testPath"
 	testError := errors.New("i'm a test error")
 
+	mockUserClient := clients.NewMockUserClient(ctrl)
+
 	mockDiskWrapper := clients.NewMockDiskWrapper(ctrl)
 	mockDiskWrapper.EXPECT().GetFileSystem(gomock.Eq(0)).Times(1).Return(nil, testError)
 
@@ -253,7 +259,7 @@ func TestFileSystemServiceImpl_GetBlockFilesystem_FailedGetFilesystem(t *testing
 	mockOsClient.EXPECT().OpenDisk(gomock.Eq(testPath)).Times(1).Return(mockDiskWrapper, nil)
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient)
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
 
 	retrievedFilesystem, getFilesystemError := testFilesystemService.GetBlockFilesystem(testPath)
 
@@ -269,6 +275,8 @@ func TestFileSystemServiceImpl_GetBlockFilesystem_FailedGetDisk(t *testing.T) {
 	testPath := "testPath"
 	testError := errors.New("i'm a test error")
 
+	mockUserClient := clients.NewMockUserClient(ctrl)
+
 	mockDiskWrapper := clients.NewMockDiskWrapper(ctrl)
 	mockDiskWrapper.EXPECT().GetFileSystem(gomock.Any()).Times(0)
 
@@ -276,7 +284,7 @@ func TestFileSystemServiceImpl_GetBlockFilesystem_FailedGetDisk(t *testing.T) {
 	mockOsClient.EXPECT().OpenDisk(gomock.Eq(testPath)).Times(1).Return(mockDiskWrapper, testError)
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient)
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
 
 	retrievedFilesystem, getFilesystemError := testFilesystemService.GetBlockFilesystem(testPath)
 
@@ -300,6 +308,7 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory(t *testing.
 
 	osClient := clients.NewMockOsClient(ctrl)
 	osClient.EXPECT().CreateFile("destPath").Times(1).Return(mockDestFile, nil)
+	mockUserClient := clients.NewMockUserClient(ctrl)
 
 	mockFileInfo := NewMockFileInfo(ctrl)
 	mockFileInfo.EXPECT().IsDir().Times(1).Return(false)
@@ -323,7 +332,7 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory(t *testing.
 	mockFileSystem.EXPECT().OpenFile(gomock.Eq(fmt.Sprintf("%s/%s", testPath, testFile)), gomock.Eq(0)).Return(mockSourceFile, nil)
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, osClient)
+	testFilesystemService.initialize(&logrus.Logger{}, osClient, mockUserClient)
 
 	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, testPath, "destPath", false)
 
@@ -362,13 +371,14 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory_ErrorCopyin
 		}
 		return 0, nil
 	})
+	mockUserClient := clients.NewMockUserClient(ctrl)
 
 	mockFileSystem := clients.NewMockFileSystemWrapper(ctrl)
 	mockFileSystem.EXPECT().ReadDir(gomock.Eq(testPath)).Times(1).Return([]os.FileInfo{mockFileInfo}, nil)
 	mockFileSystem.EXPECT().OpenFile(gomock.Eq(fmt.Sprintf("%s/%s", testPath, testFile)), gomock.Eq(0)).Return(mockSourceFile, nil)
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, osClient)
+	testFilesystemService.initialize(&logrus.Logger{}, osClient, mockUserClient)
 
 	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, testPath, "destPath", false)
 
@@ -389,6 +399,8 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory_ErrorOpenin
 	mockDestFile := clients.NewMockFileWrapper(ctrl)
 	mockDestFile.EXPECT().Write(gomock.Eq(testBytes)).Times(0)
 
+	mockUserClient := clients.NewMockUserClient(ctrl)
+
 	osClient := clients.NewMockOsClient(ctrl)
 	osClient.EXPECT().CreateFile("destPath").Times(0)
 
@@ -404,7 +416,7 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory_ErrorOpenin
 	mockFileSystem.EXPECT().OpenFile(gomock.Eq(fmt.Sprintf("%s/%s", testPath, testFile)), gomock.Eq(0)).Return(nil, errors.New("i failed to open the file"))
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, osClient)
+	testFilesystemService.initialize(&logrus.Logger{}, osClient, mockUserClient)
 
 	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, testPath, "destPath", false)
 
@@ -441,8 +453,10 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory_ErrorReadin
 	mockFileSystem.EXPECT().ReadDir(gomock.Eq(testPath)).Times(1).Return(nil, errors.New(errorMessage))
 	mockFileSystem.EXPECT().OpenFile(gomock.Any(), gomock.Any()).Times(0)
 
+	mockUserClient := clients.NewMockUserClient(ctrl)
+
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, osClient)
+	testFilesystemService.initialize(&logrus.Logger{}, osClient, mockUserClient)
 
 	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, testPath, "destPath", false)
 
@@ -491,8 +505,10 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleFile(t *testing.T) {
 	})
 	mockFileSystem.EXPECT().OpenFile(gomock.Eq(fmt.Sprintf("%s/%s", "", testFile)), gomock.Eq(0)).Return(mockSourceFile, nil)
 
+	mockUserClient := clients.NewMockUserClient(ctrl)
+
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, osClient)
+	testFilesystemService.initialize(&logrus.Logger{}, osClient, mockUserClient)
 
 	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, testFile, "destPath", false)
 
@@ -515,7 +531,7 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleFile_NilFileInfo(t *t
 	})
 
 	testFilesystemService := GetFileSystemService()
-	testFilesystemService.initialize(&logrus.Logger{}, nil)
+	testFilesystemService.initialize(&logrus.Logger{}, nil, nil)
 
 	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, testFile, "destPath", false)
 
