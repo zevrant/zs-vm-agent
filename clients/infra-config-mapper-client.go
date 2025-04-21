@@ -23,8 +23,11 @@ type InfraConfigMapperClientImpl struct {
 func (infraMapperClient *InfraConfigMapperClientImpl) initialize(logger *logrus.Logger) {
 	infraMapperClient.logger = logger
 	infraMapperClient.configMapperUrl = os.Getenv("INFRA_CONFIG_MAPPER_URL")
-	hostname := os.Getenv("HOSTNAME")
-	infraMapperClient.httpClient = NewClient(hostname, "", "", false, logger)
+	hostname := os.Getenv("HOST")
+	if hostname == "" {
+		hostname = os.Getenv("HOSTNAME")
+	}
+	infraMapperClient.httpClient = NewClient(infraMapperClient.configMapperUrl, "", "", false, logger)
 }
 
 func (infraMapperClient *InfraConfigMapperClientImpl) GetTagsByHostname() ([]string, error) {
