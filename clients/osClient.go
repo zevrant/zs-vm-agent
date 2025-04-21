@@ -19,11 +19,11 @@ type OsClient interface {
 }
 
 type OsClientImpl struct {
+	logger *logrus.Logger
 }
 
 func (osClient *OsClientImpl) initialize(logger *logrus.Logger) {
-	//TODO implement me
-	panic("implement me")
+	osClient.logger = logger
 }
 
 func (osClient *OsClientImpl) StatFile(path string) (os.FileInfo, error) {
