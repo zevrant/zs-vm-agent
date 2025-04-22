@@ -26,6 +26,7 @@ func (infraMapperClient *InfraConfigMapperClientImpl) initialize(logger *logrus.
 	if infraMapperClient.hostname == "" {
 		infraMapperClient.hostname = os.Getenv("HOSTNAME")
 	}
+	logger.Debugf("Hostname is %s", infraMapperClient.hostname)
 	infraMapperClient.httpClient = NewClient(os.Getenv("INFRA_CONFIG_MAPPER_URL"), "", "", false, logger)
 }
 

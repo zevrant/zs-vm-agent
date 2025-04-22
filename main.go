@@ -21,8 +21,17 @@ func main() {
 	logger.Info("Initializing Services")
 	services.Initialize(logger)
 
-	vmDetails, _ := clients.GetInfraConfigMapperClient().GetVmDetailsByHostname()
+	vmDetails, getVmDetailsError := clients.GetInfraConfigMapperClient().GetVmDetailsByHostname()
 
+	if getVmDetailsError != nil {
+		logger.Errorf("Failed to retrieve vm details: %s", getVmDetailsError.Error())
+		return
+	}
+
+	if vmDetails == nil {
+		logger.Error("Failed to retrieve vm details, retrieved nil")
+		return
+	}
 	logger.Debugf("Retrieved vm details for vm %s", vmDetails.VmId)
 
 	for _, tag := range vmDetails.Tags {
