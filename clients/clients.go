@@ -6,9 +6,9 @@ var infraConfigMapperClient InfraConfigMapperClientImpl
 var osClient OsClientImpl
 var userClient UserClientImpl
 
-func Initialize(logger *logrus.Logger) {
+func Initialize(logger *logrus.Logger, hostname string) {
 
-	infraConfigMapperClient.initialize(logger)
+	infraConfigMapperClient.initialize(logger, hostname)
 	osClient.initialize(logger)
 	userClient.initialize(logger)
 }

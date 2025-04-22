@@ -9,7 +9,7 @@ import (
 )
 
 type InfraConfigMapperClient interface {
-	initialize(logger *logrus.Logger)
+	initialize(logger *logrus.Logger, hostname string)
 	GetTagsByHostname() ([]string, error)
 	GetVmDetailsByHostname() (*ProxmoxVm, error)
 }
@@ -20,12 +20,10 @@ type InfraConfigMapperClientImpl struct {
 	logger     *logrus.Logger
 }
 
-func (infraMapperClient *InfraConfigMapperClientImpl) initialize(logger *logrus.Logger) {
+func (infraMapperClient *InfraConfigMapperClientImpl) initialize(logger *logrus.Logger, hostname string) {
 	infraMapperClient.logger = logger
-	infraMapperClient.hostname = os.Getenv("HOST")
-	if infraMapperClient.hostname == "" {
-		infraMapperClient.hostname = os.Getenv("HOSTNAME")
-	}
+	infraMapperClient.hostname = hostname
+
 	logger.Debugf("Hostname is %s", infraMapperClient.hostname)
 	infraMapperClient.httpClient = NewClient(os.Getenv("INFRA_CONFIG_MAPPER_URL"), "", "", false, logger)
 }

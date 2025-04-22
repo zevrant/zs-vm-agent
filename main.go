@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"github.com/diskfs/go-diskfs/backend/file"
 	"github.com/sirupsen/logrus"
 	"os"
 	"strings"
@@ -16,8 +18,15 @@ var templateMap = map[string]func(logger *logrus.Logger, vmDetails clients.Proxm
 func main() {
 	logger := initLogging()
 
+	hostname, getHostnameError := retrieveHostname()
+
+	if getHostnameError != nil {
+		logger.Errorf("Failed to read hostname from filesystem: %s", getHostnameError.Error())
+		os.Exit(-1)
+	}
+
 	logger.Info("Initializing Clients")
-	clients.Initialize(logger)
+	clients.Initialize(logger, *hostname)
 	logger.Info("Initializing Services")
 	services.Initialize(logger)
 
@@ -25,12 +34,12 @@ func main() {
 
 	if getVmDetailsError != nil {
 		logger.Errorf("Failed to retrieve vm details: %s", getVmDetailsError.Error())
-		return
+		os.Exit(-1)
 	}
 
 	if vmDetails == nil {
 		logger.Error("Failed to retrieve vm details, retrieved nil")
-		return
+		os.Exit(-1)
 	}
 	logger.Debugf("Retrieved vm details for vm %s", vmDetails.VmId)
 
@@ -39,7 +48,7 @@ func main() {
 		if okay {
 			err := val(logger, *vmDetails)
 			if err != nil {
-				return
+				os.Exit(-1)
 			}
 			break
 		}
@@ -67,4 +76,29 @@ func initLogging() *logrus.Logger {
 	log.SetLevel(logLevelCode)
 	log.SetFormatter(customFormatter)
 	return log
+}
+
+func retrieveHostname() (*string, error) {
+	hostnameFile, openFileError := file.OpenFromPath("/etc/hostname", true)
+	if openFileError != nil {
+		return nil, openFileError
+	}
+
+	readBuffer := make([]byte, 4096)
+	bytesRead, readError := hostnameFile.Read(readBuffer)
+	byteBuffer := bytes.Buffer{}
+	if readError != nil {
+		return nil, readError
+	}
+	for bytesRead > 0 {
+		if readError != nil {
+			return nil, readError
+		}
+		for i := range bytesRead {
+			byteBuffer.WriteByte(readBuffer[i])
+		}
+		bytesRead, readError = hostnameFile.Read(readBuffer)
+	}
+	hostnameBytes := strings.TrimSpace(string(byteBuffer.Bytes()))
+	return &hostnameBytes, nil
 }
