@@ -324,14 +324,19 @@ func (filesystemService *FileSystemServiceImpl) SetRootFsOwner(path string, owne
 }
 
 func (filesystemService *FileSystemServiceImpl) ReadFileContents(path string) ([]byte, error) {
+	filesystemService.logger.Debugf("Reading File at %s", path)
 	file, getFileError := filesystemService.osClient.OpenFile(path)
 	if getFileError != nil {
 		filesystemService.logger.Errorf("Failed to open file at %s: %s", path, getFileError.Error())
 		return nil, getFileError
 	}
-	var byteSlice []byte
+	byteSlice := make([]byte, 4096)
 	var fileBuffer bytes.Buffer
 	bytesRead, readError := file.Read(byteSlice)
+
+	if bytesRead == 0 {
+		filesystemService.logger.Error("No data read empty file")
+	}
 
 	for bytesRead > 0 {
 		if readError != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/sirupsen/logrus"
+	"strings"
 	"zs-vm-agent/clients"
 	"zs-vm-agent/services"
 )
@@ -205,9 +206,13 @@ func performPrerunConfiguration(logger *logrus.Logger) error {
 		return getFileContentsError
 	}
 
+	contentString := strings.TrimSpace(string(contents))
+
+	logger.Debugf("content is %s", string(contents))
+
 	var config loadbalancerConfig
 
-	jsonError := json.Unmarshal(contents, &config)
+	jsonError := json.Unmarshal([]byte(contentString), &config)
 
 	if jsonError != nil {
 		logger.Errorf("Failed to parse vm-configuration json: %s", jsonError.Error())
