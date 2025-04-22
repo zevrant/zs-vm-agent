@@ -23,6 +23,8 @@ func main() {
 
 	vmDetails, _ := clients.GetInfraConfigMapperClient().GetVmDetailsByHostname()
 
+	logger.Debugf("Retrieved vm details for vm %s", vmDetails.VmId)
+
 	for _, tag := range vmDetails.Tags {
 		val, okay := templateMap[tag]
 		if okay {

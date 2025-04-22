@@ -15,25 +15,24 @@ type InfraConfigMapperClient interface {
 }
 
 type InfraConfigMapperClientImpl struct {
-	configMapperUrl string
-	httpClient      *Client
-	logger          *logrus.Logger
+	hostname   string
+	httpClient *Client
+	logger     *logrus.Logger
 }
 
 func (infraMapperClient *InfraConfigMapperClientImpl) initialize(logger *logrus.Logger) {
 	infraMapperClient.logger = logger
-	infraMapperClient.configMapperUrl = os.Getenv("INFRA_CONFIG_MAPPER_URL")
-	hostname := os.Getenv("HOST")
-	if hostname == "" {
-		hostname = os.Getenv("HOSTNAME")
+	infraMapperClient.hostname = os.Getenv("HOST")
+	if infraMapperClient.hostname == "" {
+		infraMapperClient.hostname = os.Getenv("HOSTNAME")
 	}
-	infraMapperClient.httpClient = NewClient(infraMapperClient.configMapperUrl, "", "", false, logger)
+	infraMapperClient.httpClient = NewClient(os.Getenv("INFRA_CONFIG_MAPPER_URL"), "", "", false, logger)
 }
 
 func (infraMapperClient *InfraConfigMapperClientImpl) GetTagsByHostname() ([]string, error) {
 	request, requestCreationError := http.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("%s/state/vm/%s/tags", infraMapperClient.configMapperUrl, infraMapperClient.httpClient.hostURL),
+		fmt.Sprintf("%s/state/vm/%s/tags", infraMapperClient.httpClient.hostURL, infraMapperClient.hostname),
 		nil)
 
 	if requestCreationError != nil {
@@ -63,7 +62,7 @@ func (infraMapperClient *InfraConfigMapperClientImpl) GetTagsByHostname() ([]str
 func (infraMapperClient *InfraConfigMapperClientImpl) GetVmDetailsByHostname() (*ProxmoxVm, error) {
 	request, requestCreationError := http.NewRequest(
 		http.MethodGet,
-		fmt.Sprintf("%s/state/vm/%s", infraMapperClient.configMapperUrl, infraMapperClient.httpClient.hostURL),
+		fmt.Sprintf("%s/state/vm/%s", infraMapperClient.httpClient.hostURL, infraMapperClient.hostname),
 		nil)
 
 	if requestCreationError != nil {
