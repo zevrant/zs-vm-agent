@@ -5,6 +5,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"os/exec"
 	"strconv"
+	"strings"
 )
 
 //TODO: Hook into C++ selinux api directly rather than exec commands
@@ -31,11 +32,15 @@ func (selinuxService *SeLinuxServiceImpl) initialize(logger *logrus.Logger) {
 }
 
 func (selinuxService *SeLinuxServiceImpl) OpenInboundPort(port int, protocol PortProtocol) error {
-	command := exec.Command("/usr/sbin/semanage", "port", "--add", "--type", "http_port_t", fmt.Sprintf("--proto %s", protocol), strconv.FormatInt(int64(port), 10))
+	args := []string{"port", "--add", "--type", "http_port_t", fmt.Sprintf("--proto %s", protocol), strings.Replace(strconv.FormatInt(int64(port), 10), "\n", "", -1)}
+	selinuxService.logger.Debugf("port command is %s %s", "/usr/sbin/semanage", args)
+	command := exec.Command("/usr/sbin/semanage", args...)
+
+	selinuxService.logger.Debugf("Opening port %d/%s", port, protocol)
 
 	outputText, executeCommandError := command.CombinedOutput()
 
-	selinuxService.logger.Info(outputText)
+	selinuxService.logger.Infof("command output: %s", outputText)
 
 	if executeCommandError != nil {
 		selinuxService.logger.Errorf("Failed to enable inbound port with SEManage: %s", executeCommandError.Error())

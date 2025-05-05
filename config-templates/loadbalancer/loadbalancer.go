@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/sirupsen/logrus"
-	"strings"
 	"zs-vm-agent/clients"
 	"zs-vm-agent/services"
 )
 
 var systemServices = [...]string{
-	"keepalived",
+	//"keepalived",
 	"haproxy",
 }
 
@@ -206,21 +205,24 @@ func performPrerunConfiguration(logger *logrus.Logger) error {
 		return getFileContentsError
 	}
 
-	contentString := strings.TrimSpace(string(contents))
-
 	logger.Debugf("content is %s", string(contents))
 
-	var config loadbalancerConfig
+	var c LoadbalancerConfig
 
-	jsonError := json.Unmarshal([]byte(contentString), &config)
+	jsonError := json.Unmarshal(contents, &c)
+	logger.Debugf("Unmarshalled json")
 
 	if jsonError != nil {
 		logger.Errorf("Failed to parse vm-configuration json: %s", jsonError.Error())
 		return jsonError
 	}
 
-	for _, port := range config.ports {
-		openPortError := services.GetSeLinuxService().OpenInboundPort(port.port, port.protocol)
+	logger.Debugf("performing port configurations %d", len(c.Ports))
+	test, _ := json.Marshal(c)
+	logger.Debugf("Test: %s", string(test))
+	for _, port := range c.Ports {
+		logger.Debugf("Opening port %d/%s", port.Port, port.Protocol)
+		openPortError := services.GetSeLinuxService().OpenInboundPort(port.Port, port.Protocol)
 		if openPortError != nil {
 			return openPortError
 		}
@@ -228,11 +230,11 @@ func performPrerunConfiguration(logger *logrus.Logger) error {
 	return nil
 }
 
-type loadbalancerConfig struct {
-	ports []portMapping
+type LoadbalancerConfig struct {
+	Ports []portMapping
 }
 
 type portMapping struct {
-	port     int
-	protocol string
+	Port     int
+	Protocol string
 }
