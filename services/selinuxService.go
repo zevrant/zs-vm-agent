@@ -1,11 +1,9 @@
 package services
 
 import (
-	"fmt"
 	"github.com/sirupsen/logrus"
 	"os/exec"
 	"strconv"
-	"strings"
 )
 
 //TODO: Hook into C++ selinux api directly rather than exec commands
@@ -14,6 +12,7 @@ type SeLinuxService interface {
 	initialize(logger *logrus.Logger)
 	ChangeContext(path string, u string, r string, t string, recursive bool) error
 	OpenInboundPort(port int, protocol PortProtocol) error
+	AllowAllOutboundConnection() error
 }
 
 type SeLinuxServiceImpl struct {
@@ -32,12 +31,25 @@ func (selinuxService *SeLinuxServiceImpl) initialize(logger *logrus.Logger) {
 }
 
 func (selinuxService *SeLinuxServiceImpl) OpenInboundPort(port int, protocol PortProtocol) error {
-	args := []string{"port", "--add", "--type", "http_port_t", fmt.Sprintf("--proto %s", protocol), strings.Replace(strconv.FormatInt(int64(port), 10), "\n", "", -1)}
+	args := []string{"port", strconv.FormatInt(int64(port), 10), "--add", "--type", "http_port_t", "--proto", protocol}
 	selinuxService.logger.Debugf("port command is %s %s", "/usr/sbin/semanage", args)
 	command := exec.Command("/usr/sbin/semanage", args...)
 
 	selinuxService.logger.Debugf("Opening port %d/%s", port, protocol)
 
+	outputText, executeCommandError := command.CombinedOutput()
+
+	selinuxService.logger.Infof("command output: %s", outputText)
+
+	if executeCommandError != nil {
+		selinuxService.logger.Errorf("Failed to enable inbound port with SEManage: %s", executeCommandError.Error())
+		return executeCommandError
+	}
+	return nil
+}
+
+func (selinuxService *SeLinuxServiceImpl) AllowAllOutboundConnection() error {
+	command := exec.Command("/sbin/setsebool", "-P", "haproxy_connect_any", "1")
 	outputText, executeCommandError := command.CombinedOutput()
 
 	selinuxService.logger.Infof("command output: %s", outputText)

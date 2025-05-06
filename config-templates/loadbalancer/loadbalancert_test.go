@@ -8,7 +8,7 @@ import (
 
 func TestJsonMarshalTest(t *testing.T) {
 
-	var configObject LoadbalancerConfig
+	var configObject Config
 
 	config := "{\"ports\": [{\"port\":80,\"protocol\":\"tcp\"},{\"port\":443,\"protocol\":\"tcp\"},{\"port\":8080,\"protocol\":\"tcp\"},{\"port\":9000,\"protocol\":\"tcp\"},{\"port\":9001,\"protocol\":\"tcp\"}]}"
 

@@ -9,7 +9,7 @@ import (
 )
 
 var systemServices = [...]string{
-	//"keepalived",
+	"keepalived",
 	"haproxy",
 }
 
@@ -21,10 +21,9 @@ type fileMapping struct {
 
 func SetupLoadBalancer(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
 	logger.Info("Setting up as load balancer")
-	var diskService services.DiskService = services.GetDiskService()
 	var fileSystemService services.FileSystemService = services.GetFileSystemService()
 
-	filePermissionError := initializeFileSystem(logger, diskService, fileSystemService)
+	filePermissionError := initializeFileSystem(fileSystemService)
 
 	if filePermissionError != nil {
 		return nil
@@ -52,7 +51,7 @@ func SetupLoadBalancer(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error
 	return nil
 }
 
-func initializeFileSystem(logger *logrus.Logger, diskService services.DiskService, filesystemService services.FileSystemService) error {
+func initializeFileSystem(filesystemService services.FileSystemService) error {
 	fs, getFileSystemError := filesystemService.GetBlockFilesystem("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1")
 
 	if getFileSystemError != nil {
@@ -207,7 +206,7 @@ func performPrerunConfiguration(logger *logrus.Logger) error {
 
 	logger.Debugf("content is %s", string(contents))
 
-	var c LoadbalancerConfig
+	var c Config
 
 	jsonError := json.Unmarshal(contents, &c)
 	logger.Debugf("Unmarshalled json")
@@ -227,10 +226,19 @@ func performPrerunConfiguration(logger *logrus.Logger) error {
 			return openPortError
 		}
 	}
+
+	logger.Debug("Opening haproxy to allow all outbound connections")
+	allowOutboundError := services.GetSeLinuxService().AllowAllOutboundConnection()
+
+	if allowOutboundError != nil {
+		logger.Errorf("Failed to allow haproxy full outbound access: %s", allowOutboundError.Error())
+		return allowOutboundError
+	}
+
 	return nil
 }
 
-type LoadbalancerConfig struct {
+type Config struct {
 	Ports []portMapping
 }
 
