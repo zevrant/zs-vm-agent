@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"os"
 	"strings"
+	"time"
 	"zs-vm-agent/clients"
 	"zs-vm-agent/config-templates/loadbalancer"
 	"zs-vm-agent/services"
@@ -18,7 +19,7 @@ var templateMap = map[string]func(logger *logrus.Logger, vmDetails clients.Proxm
 func main() {
 	logger := initLogging()
 
-	hostname, getHostnameError := retrieveHostname()
+	hostname, getHostnameError := loadHostname(logger)
 
 	if getHostnameError != nil {
 		logger.Errorf("Failed to read hostname from filesystem: %s", getHostnameError.Error())
@@ -101,4 +102,21 @@ func retrieveHostname() (*string, error) {
 	}
 	hostnameBytes := strings.TrimSpace(string(byteBuffer.Bytes()))
 	return &hostnameBytes, nil
+}
+
+func loadHostname(logger *logrus.Logger) (*string, error) {
+	var hostname *string
+	var getHostnameError error
+
+	for hostname == nil || *hostname == "localhost" {
+		time.Sleep(1 * time.Second)
+		hostname, getHostnameError = retrieveHostname()
+
+		if getHostnameError != nil {
+			logger.Errorf("Failed to read hostname from filesystem: %s", getHostnameError.Error())
+			os.Exit(-1)
+		}
+	}
+
+	return hostname, nil
 }
