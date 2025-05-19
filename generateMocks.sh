@@ -1,6 +1,10 @@
+#!/bin/bash
 #External Mocks
 mockgen github.com/diskfs/go-diskfs/filesystem FileSystem > services/filesystem_mock_test.go
 sed -i 's/package mock_filesystem/package services/g' services/filesystem_mock_test.go
+
+mockgen os FileInfo > services/fileInfo_mock_test.go
+sed -i 's/package mock_os/package services/g' services/fileInfo_mock_test.go
 
 #Internal Mocks
 

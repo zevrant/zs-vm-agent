@@ -8,6 +8,7 @@ import (
 type FileSystemWrapper interface {
 	OpenFile(path string, flag int) (FileWrapper, error)
 	ReadDir(path string) ([]os.FileInfo, error)
+	GetFilesystemLabel() string
 }
 
 type FileSystemWrapperImpl struct {
@@ -30,4 +31,6 @@ func (filesystemWrapper *FileSystemWrapperImpl) ReadDir(path string) ([]os.FileI
 	return filesystemWrapper.fileSystem.ReadDir(path)
 }
 
-//func (filesystemWrapper *FileSystemWrapperImpl)
+func (filesystemWrapper *FileSystemWrapperImpl) GetFilesystemLabel() string {
+	return filesystemWrapper.fileSystem.Label()
+}
