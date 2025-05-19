@@ -2,3 +2,4 @@
 *_mock.go
 /clients/diskWrapper_mock.go
 .idea/
+*_mock_test.go
