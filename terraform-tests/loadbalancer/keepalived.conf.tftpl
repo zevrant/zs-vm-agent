@@ -1,0 +1,33 @@
+vrrp_script check_haproxy_status {
+    script "killall -0 haproxy"
+    interval 3
+    rise 3
+    fall 1
+}
+
+vrrp_instance VI_1 {
+        state ${state}
+        interface eth0
+        virtual_router_id ${router_id}
+
+        priority ${replica_priority}
+
+        advert_int 1
+        authentication {
+              auth_type PASS
+              auth_pass ${vip_password}
+        }
+        virtual_ipaddress {
+              ${virtual_ip_address}
+        }
+        unicast_src_ip ${my_ip_address}
+        unicast_peer {
+        %{ for peer in peer_ip_addresses ~}
+            ${peer}
+        %{ endfor ~}
+        }
+
+        track_script {
+            check_haproxy_status
+        }
+}

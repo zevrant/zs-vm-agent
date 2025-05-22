@@ -3,3 +3,6 @@
 /clients/diskWrapper_mock.go
 .idea/
 *_mock_test.go
+secrets/
+.terraform/
+dist/
