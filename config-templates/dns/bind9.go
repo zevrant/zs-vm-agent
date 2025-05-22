@@ -11,6 +11,7 @@ import (
 )
 
 func SetupBind9(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
+
 	filesystemService := services.GetFileSystemService()
 
 	copyFilesError := copyFiles(logger, filesystemService)
