@@ -8,12 +8,14 @@ import (
 	"strings"
 	"time"
 	"zs-vm-agent/clients"
+	"zs-vm-agent/config-templates/dns"
 	"zs-vm-agent/config-templates/loadbalancer"
 	"zs-vm-agent/services"
 )
 
 var templateMap = map[string]func(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error{
 	"loadbalancer": loadbalancer.SetupLoadBalancer,
+	"dns":          dns.SetupBind9,
 }
 
 func main() {

@@ -6,10 +6,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"strings"
 	"time"
+	"zs-vm-agent/clients"
 	"zs-vm-agent/services"
 )
 
-func SetupBind9(logger *logrus.Logger) error {
+func SetupBind9(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
+
 	filesystemService := services.GetFileSystemService()
 
 	copyFilesError := copyFiles(logger, filesystemService)
