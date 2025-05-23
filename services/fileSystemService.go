@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/diskfs/go-diskfs/filesystem"
-	"github.com/sirupsen/logrus"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
 	"zs-vm-agent/clients"
+
+	"github.com/diskfs/go-diskfs/filesystem"
+	"github.com/moby/sys/mount"
+	"github.com/sirupsen/logrus"
 )
 
 type FileSystemService interface {
@@ -22,6 +25,9 @@ type FileSystemService interface {
 	GetBlockFilesystem(devicePath string) (clients.FileSystemWrapper, error)
 	CopyFilesToRootFs(sourceFilesystem clients.FileSystemWrapper, sourcePath string, destPath string, recursive bool) error
 	ReadFileContents(path string) ([]byte, error)
+	ReadFileContentsFromFilesystem(fs clients.FileSystemWrapper, path string) ([]byte, error)
+	MountFilesystem(deviceLocation string, mountLocatoin string) error
+	CreateXfsFileSystem(partitionPath string) error
 }
 
 type FileSystemServiceImpl struct {
@@ -137,7 +143,7 @@ func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesyst
 	localSourcePath := sourcePath
 	fileInfos, readSourceError := filesystemService.attemptReadDir(sourceFilesystem, sourcePath)
 
-	if readSourceError != nil {
+	if readSourceError != nil && readSourceError.Error() != fmt.Sprintf("error reading directory %s: cannot create directory at %s since it is a file", sourcePath, sourcePath) {
 		filesystemService.logger.Debugf("Failed to read source file at %s, cannot continue copy operation", sourcePath)
 		return readSourceError
 	}
@@ -350,4 +356,57 @@ func (filesystemService *FileSystemServiceImpl) ReadFileContents(path string) ([
 	}
 
 	return fileBuffer.Bytes(), nil
+}
+
+func (filesystemService *FileSystemServiceImpl) ReadFileContentsFromFilesystem(fs clients.FileSystemWrapper, path string) ([]byte, error) {
+	file, openFileError := fs.OpenFile(path, 0)
+
+	if openFileError != nil {
+		filesystemService.logger.Errorf("Failed to open file %s on file system %s: %s", path, fs.GetFilesystemLabel(), openFileError.Error())
+		return nil, openFileError
+	}
+
+	readBuffer := make([]byte, 4096)
+	byteBuffer := bytes.NewBuffer(make([]byte, 0))
+	bytesRead, readError := file.Read(readBuffer)
+
+	for bytesRead > 0 {
+		if readError != nil && readError.Error() != "EOF" {
+			filesystemService.logger.Errorf("Failed to read from file %s on file system %s: %s", path, fs.GetFilesystemLabel(), readError.Error())
+			return nil, readError
+		}
+		for i := range bytesRead {
+			byteBuffer.WriteByte(readBuffer[i])
+		}
+		bytesRead, readError = file.Read(readBuffer)
+	}
+
+	return byteBuffer.Bytes(), nil
+}
+
+func (filesystemService *FileSystemServiceImpl) MountFilesystem(deviceLocation string, mountLocation string) error {
+	mountError := mount.Mount(deviceLocation, mountLocation, "xfs", "")
+	if mountError != nil {
+		filesystemService.logger.Errorf("Failed to mount device %s at %s: %s", deviceLocation, mountLocation, mountError.Error())
+		return mountError
+	}
+	return nil
+}
+
+func (filesystemService *FileSystemServiceImpl) CreateXfsFileSystem(partitionPath string) error {
+	command := exec.Command("/usr/sbin/mkfs.xfs", partitionPath)
+
+	outputText, commandExecutionError := command.CombinedOutput()
+
+	for _, line := range strings.Split(string(outputText), "\n") {
+		filesystemService.logger.Info(line)
+	}
+
+	if commandExecutionError != nil {
+		filesystemService.logger.Errorf("Failed to create filesystem at %s: %s", partitionPath, commandExecutionError.Error())
+		commandExecutionError = errors.New(commandExecutionError.Error() + " " + string(outputText))
+		return commandExecutionError
+	}
+
+	return nil
 }
