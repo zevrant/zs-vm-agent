@@ -208,7 +208,7 @@ func (filesystemService *FileSystemServiceImpl) copySingleFileToRootFs(sourceFil
 	}
 	osFile, createFileError := filesystemService.osClient.CreateFile(destPath)
 	if createFileError != nil && strings.Contains(createFileError.Error(), "is a directory") {
-		osFile, createFileError = os.Create(fmt.Sprintf("%s/%s", destPath, sourceFileName))
+		osFile, createFileError = filesystemService.osClient.CreateFile(fmt.Sprintf("%s/%s", destPath, sourceFileName))
 	} else if createFileError != nil {
 		filesystemService.logger.Errorf("Failed to create file to copy source to %s: %s", destPath, createFileError.Error())
 		return createFileError
@@ -298,15 +298,6 @@ func (filesystemService *FileSystemServiceImpl) SetRootFsOwner(path string, owne
 
 	fileSys := directoryInfo.Sys().(*syscall.Stat_t)
 
-	directoryGuid := fmt.Sprint(fileSys.Gid)
-
-	guid, guidConversionError := strconv.Atoi(directoryGuid)
-
-	if guidConversionError != nil {
-		filesystemService.logger.Errorf("Failed to convert guid string %s to integer: %s", directoryGuid, guidConversionError)
-		return guidConversionError
-	}
-
 	ownerUser, getUserUidError := filesystemService.userClient.GetUserByName(owner)
 
 	if getUserUidError != nil {
@@ -321,7 +312,7 @@ func (filesystemService *FileSystemServiceImpl) SetRootFsOwner(path string, owne
 		return uidConversionError
 	}
 
-	setOwnerError := filesystemService.osClient.SetOwner(path, uid, guid)
+	setOwnerError := filesystemService.osClient.SetOwner(path, uid, int(fileSys.Gid))
 	if setOwnerError != nil {
 		logrus.Errorf("Failed to set owner for %s: %s", path, setOwnerError)
 		return setOwnerError
