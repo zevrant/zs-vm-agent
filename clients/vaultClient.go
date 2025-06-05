@@ -27,7 +27,7 @@ func (vaultClient *VaultClientImpl) initialize(logger *logrus.Logger) {
 
 func (vaultClient *VaultClientImpl) SubmitUnsealKey(vaultApiUrl string, unsealKey string) error {
 	vaultClient.logger.Debugf("Vault URL is %s", vaultApiUrl)
-	vaultClient.httpClient = NewClient(vaultApiUrl, "", "", false, vaultClient.logger)
+	vaultClient.httpClient = NewClient(vaultApiUrl, "", "", true, vaultClient.logger)
 
 	request, requestCreationError := http.NewRequest(
 		http.MethodPut,
@@ -51,7 +51,7 @@ func (vaultClient *VaultClientImpl) SubmitUnsealKey(vaultApiUrl string, unsealKe
 
 func (vaultClient *VaultClientImpl) GetVaultStatus(vaultApiUrl string) (*VaultStatusResponse, error) {
 	vaultClient.logger.Debugf("Vault URL is %s", vaultApiUrl)
-	vaultClient.httpClient = NewClient(vaultApiUrl, "", "", false, vaultClient.logger)
+	vaultClient.httpClient = NewClient(vaultApiUrl, "", "", true, vaultClient.logger)
 	request, requestCreationError := http.NewRequest(
 		http.MethodGet,
 		fmt.Sprintf("%s/v1/sys/seal-status", vaultClient.httpClient.hostURL),
