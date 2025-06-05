@@ -49,7 +49,7 @@ resource proxmox_vm hashi-vault-agent-test {
     size             = "1G"
     order            = 1
     import_from = "local"
-    import_path = format("0/%s", module.vault_secret_volume.secret_volume_name)
+    import_path = format("0/%s", jsondecode(data.minio_s3_object.vpc_configurations.content).dns_secret_config)
   }
 
 
@@ -71,40 +71,4 @@ resource random_bytes mac_address_2 {
 }
 resource random_bytes mac_address_3 {
   length = 1
-}
-
-module vault_certificate {
-  source      = "../modules/kvm/certificates"
-  common_name = "vault.zevrant-services.com"
-}
-
-
-module vault_secret_volume {
-  source = "../modules/kvm/secret-volume"
-  secrets = [
-    {
-      filename = "vault-public.pem"
-      value    = module.vault_certificate.public_pem
-    },
-    {
-      filename = "vault-private.pem"
-      value    = module.vault_certificate.private_pem
-    },
-    {
-      filename = "vault-issuer.pem"
-      value    = module.vault_certificate.issuer_pem
-    },
-    {
-      filename = "vault-key-1"
-      value    = trimspace(data.vault_kv_secret_v2.key1.data.password)
-    },
-    {
-      filename = "vault-key-2"
-      value    = trimspace(data.vault_kv_secret_v2.key2.data.password)
-    },
-    {
-      filename = "vault-key-3"
-      value    = trimspace(data.vault_kv_secret_v2.key3.data.password)
-    }
-  ]
 }

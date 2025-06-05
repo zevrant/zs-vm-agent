@@ -3,10 +3,11 @@ package clients
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 const FORM_URL_ENCODED = "application/x-www-form-urlencoded"
@@ -51,7 +52,6 @@ func (c *Client) doRequest(req *http.Request, contentType string) ([]byte, error
 
 func (c *Client) doRequestWithResponseStatus(req *http.Request, expectedResponseStatus int, contentType string) ([]byte, error) {
 	c.logger.Debug(fmt.Sprintf("Making %s request to %s", req.Method, req.URL))
-	req.Header.Set("Authorization", fmt.Sprintf("PVEAPIToken=%s=%s", c.auth.Username, c.auth.Password))
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", contentType)
 	if !c.enableTLSVerification {

@@ -2,20 +2,23 @@ package main
 
 import (
 	"bytes"
-	"github.com/diskfs/go-diskfs/backend/file"
-	"github.com/sirupsen/logrus"
 	"os"
 	"strings"
 	"time"
 	"zs-vm-agent/clients"
 	"zs-vm-agent/config-templates/dns"
 	"zs-vm-agent/config-templates/loadbalancer"
+	"zs-vm-agent/config-templates/vault"
 	"zs-vm-agent/services"
+
+	"github.com/diskfs/go-diskfs/backend/file"
+	"github.com/sirupsen/logrus"
 )
 
 var templateMap = map[string]func(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error{
 	"loadbalancer": loadbalancer.SetupLoadBalancer,
 	"dns":          dns.SetupBind9,
+	"vault":        vault.Setup,
 }
 
 func main() {
@@ -33,27 +36,35 @@ func main() {
 	logger.Info("Initializing Services")
 	services.Initialize(logger)
 
-	vmDetails, getVmDetailsError := clients.GetInfraConfigMapperClient().GetVmDetailsByHostname()
+	//vmDetails, getVmDetailsError := clients.GetInfraConfigMapperClient().GetVmDetailsByHostname()
+	//
+	//if getVmDetailsError != nil {
+	//	logger.Errorf("Failed to retrieve vm details: %s", getVmDetailsError.Error())
+	//	os.Exit(-1)
+	//}
+	//
+	//if vmDetails == nil {
+	//	logger.Error("Failed to retrieve vm details, retrieved nil")
+	//	os.Exit(-1)
+	//}
+	//logger.Debugf("Retrieved vm details for vm %s", vmDetails.VmId)
 
-	if getVmDetailsError != nil {
-		logger.Errorf("Failed to retrieve vm details: %s", getVmDetailsError.Error())
-		os.Exit(-1)
-	}
+	//for _, tag := range vmDetails.Tags {
+	//	val, okay := templateMap[tag]
+	//	if okay {
+	//		err := val(logger, *vmDetails)
+	//		if err != nil {
+	//			os.Exit(-1)
+	//		}
+	//		break
+	//	}
+	//}
 
-	if vmDetails == nil {
-		logger.Error("Failed to retrieve vm details, retrieved nil")
-		os.Exit(-1)
-	}
-	logger.Debugf("Retrieved vm details for vm %s", vmDetails.VmId)
-
-	for _, tag := range vmDetails.Tags {
-		val, okay := templateMap[tag]
-		if okay {
-			err := val(logger, *vmDetails)
-			if err != nil {
-				os.Exit(-1)
-			}
-			break
+	val, okay := templateMap["vault"]
+	if okay {
+		err := val(logger, clients.ProxmoxVm{})
+		if err != nil {
+			os.Exit(-1)
 		}
 	}
 }

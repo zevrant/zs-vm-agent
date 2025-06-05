@@ -6,6 +6,9 @@ sed -i 's/package mock_filesystem/package services/g' services/filesystem_mock_t
 mockgen os FileInfo > services/fileInfo_mock_test.go
 sed -i 's/package mock_os/package services/g' services/fileInfo_mock_test.go
 
+mockgen github.com/diskfs/go-diskfs/filesystem File > services/filesystem_file_mock_test.go
+sed -i 's/package mock_filesystem/package services/g' services/filesystem_file_mock_test.go
+
 #Internal Mocks
 
 mockgen -source=clients/osClient.go -destination=clients/osClient_mock.go

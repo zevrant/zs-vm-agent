@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/user"
+	"syscall"
 	"testing"
 	"zs-vm-agent/clients"
 
@@ -538,4 +540,293 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleFile_NilFileInfo(t *t
 	assert.NotNil(t, getFilesystemError)
 	assert.Errorf(t, getFilesystemError, fmt.Sprintf("file %s could not be found", testFile))
 
+}
+
+func TestFileSystemService_SetRootFsOwner(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPath := "aPath"
+	testOwner := "testOwner"
+
+	mockFileInfo := NewMockFileInfo(ctrl)
+	mockFileInfo.EXPECT().IsDir().Times(1).Return(false)
+	mockFileInfo.EXPECT().Sys().Times(1).Return(&syscall.Stat_t{
+		Gid: 9001,
+	})
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().StatFile(testPath).Times(1).Return(mockFileInfo, nil)
+	mockOsClient.EXPECT().SetOwner(testPath, 9001, 9001).Return(nil)
+
+	testUser := user.User{
+		Uid: "9001",
+	}
+
+	mockUserClient := clients.NewMockUserClient(ctrl)
+	mockUserClient.EXPECT().GetUserByName(testOwner).Times(1).Return(&testUser, nil)
+
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
+	setOwnerError := testFilesystemService.SetRootFsOwner(testPath, testOwner, false)
+
+	assert.Nil(t, setOwnerError)
+}
+
+func TestFileSystemService_SetRootFsOwner_setOwnerError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPath := "aPath"
+	testOwner := "testOwner"
+
+	mockFileInfo := NewMockFileInfo(ctrl)
+	mockFileInfo.EXPECT().IsDir().Times(1).Return(false)
+	mockFileInfo.EXPECT().Sys().Times(1).Return(&syscall.Stat_t{
+		Gid: 9001,
+	})
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().StatFile(testPath).Times(1).Return(mockFileInfo, nil)
+	mockOsClient.EXPECT().SetOwner(testPath, 9001, 9001).Return(errors.New("testError"))
+
+	testUser := user.User{
+		Uid: "9001",
+	}
+
+	mockUserClient := clients.NewMockUserClient(ctrl)
+	mockUserClient.EXPECT().GetUserByName(testOwner).Times(1).Return(&testUser, nil)
+
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
+	setOwnerError := testFilesystemService.SetRootFsOwner(testPath, testOwner, false)
+
+	assert.NotNil(t, setOwnerError)
+	assert.Equal(t, setOwnerError.Error(), "testError")
+}
+
+func TestFileSystemService_SetRootFsOwner_uidConversionError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPath := "aPath"
+	testOwner := "testOwner"
+
+	mockFileInfo := NewMockFileInfo(ctrl)
+	mockFileInfo.EXPECT().IsDir().Times(1).Return(false)
+	mockFileInfo.EXPECT().Sys().Times(1).Return(&syscall.Stat_t{
+		Gid: 9001,
+	})
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().StatFile(testPath).Times(1).Return(mockFileInfo, nil)
+
+	testUser := user.User{
+		Uid: "NAN",
+	}
+
+	mockUserClient := clients.NewMockUserClient(ctrl)
+	mockUserClient.EXPECT().GetUserByName(testOwner).Times(1).Return(&testUser, nil)
+
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
+	setOwnerError := testFilesystemService.SetRootFsOwner(testPath, testOwner, false)
+
+	assert.NotNil(t, setOwnerError)
+	assert.Equal(t, setOwnerError.Error(), "strconv.Atoi: parsing \"NAN\": invalid syntax")
+}
+
+func TestFileSystemService_SetRootFsOwner_getUserUidError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPath := "aPath"
+	testOwner := "testOwner"
+
+	mockFileInfo := NewMockFileInfo(ctrl)
+	mockFileInfo.EXPECT().IsDir().Times(1).Return(false)
+	mockFileInfo.EXPECT().Sys().Times(1).Return(&syscall.Stat_t{
+		Gid: 9001,
+	})
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().StatFile(testPath).Times(1).Return(mockFileInfo, nil)
+
+	mockUserClient := clients.NewMockUserClient(ctrl)
+	mockUserClient.EXPECT().GetUserByName(testOwner).Times(1).Return(nil, errors.New("testError"))
+
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
+	setOwnerError := testFilesystemService.SetRootFsOwner(testPath, testOwner, false)
+
+	assert.NotNil(t, setOwnerError)
+	assert.Equal(t, setOwnerError.Error(), "testError")
+}
+
+func TestFileSystemService_SetRootFsOwner_readDirectoryError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPath := "aPath"
+	testOwner := "testOwner"
+
+	mockFileInfo := NewMockFileInfo(ctrl)
+	mockFileInfo.EXPECT().IsDir().Times(1).Return(true)
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().StatFile(testPath).Times(1).Return(mockFileInfo, nil)
+	mockOsClient.EXPECT().ReadDir(testPath).Times(1).Return(nil, errors.New("Failed to read directories"))
+	mockUserClient := clients.NewMockUserClient(ctrl)
+
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
+	setOwnerError := testFilesystemService.SetRootFsOwner(testPath, testOwner, true)
+
+	assert.NotNil(t, setOwnerError)
+	assert.Equal(t, setOwnerError.Error(), "Failed to read directories")
+}
+
+func TestFileSystemService_SetRootFsOwner_getDirectoryInfoError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testPath := "aPath"
+	testOwner := "testOwner"
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().StatFile(testPath).Times(1).Return(nil, errors.New("testError"))
+
+	mockUserClient := clients.NewMockUserClient(ctrl)
+
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, mockUserClient)
+	setOwnerError := testFilesystemService.SetRootFsOwner(testPath, testOwner, false)
+
+	assert.NotNil(t, setOwnerError)
+	assert.Equal(t, setOwnerError.Error(), "testError")
+}
+
+func TestFileSystemServiceImpl_CopySingleFileToRootFs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testFileName := "imATestFile"
+	blankByteSlice := make([]byte, 4096)
+
+	testFileWrapper := clients.NewMockFileWrapper(ctrl)
+	testFileWrapper.EXPECT().Write(nil)
+
+	mockSourceFile := NewMockFile(ctrl)
+	mockSourceFile.EXPECT().Read(blankByteSlice).Times(1).Return(0, nil)
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().CreateFile(testFileName).Times(1).Return(testFileWrapper, nil)
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
+	copyError := filesystemService.copySingleFileToRootFs(mockSourceFile, "garbage", testFileName)
+
+	assert.Nil(t, copyError, "Failed to copy single file, error was not nil")
+}
+
+func TestFileSystemServiceImpl_CopySingleFileToRootFs_isDirectory(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testFileName := "imATestFile"
+	blankByteSlice := make([]byte, 4096)
+
+	testFileWrapper := clients.NewMockFileWrapper(ctrl)
+	testFileWrapper.EXPECT().Write(nil)
+
+	mockSourceFile := NewMockFile(ctrl)
+	mockSourceFile.EXPECT().Read(blankByteSlice).Times(1).Return(0, nil)
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().CreateFile(testFileName).Times(1).Return(nil, errors.New("test file is a directory"))
+	directoryPath := fmt.Sprintf("%s/%s", testFileName, "garbage")
+	mockOsClient.EXPECT().CreateFile(directoryPath).Times(1).Return(testFileWrapper, nil)
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
+	copyError := filesystemService.copySingleFileToRootFs(mockSourceFile, "garbage", testFileName)
+	assert.Nil(t, copyError, "Failed to copy single file, error was not nil")
+}
+
+func TestFileSystemServiceImpl_CopySingleFileToRootFs_createPermissionDenied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testFileName := "imATestFile"
+	blankByteSlice := make([]byte, 4096)
+
+	mockSourceFile := NewMockFile(ctrl)
+	mockSourceFile.EXPECT().Read(blankByteSlice).Times(1).Return(0, nil)
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().CreateFile(testFileName).Times(1).Return(nil, errors.New("permission denied"))
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
+	copyError := filesystemService.copySingleFileToRootFs(mockSourceFile, "garbage", testFileName)
+	assert.EqualError(t, copyError, "permission denied")
+}
+
+func TestFileSystemServiceImpl_CopySingleFileToRootFs_nilFile(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testFileName := "imATestFile"
+	blankByteSlice := make([]byte, 4096)
+
+	mockSourceFile := NewMockFile(ctrl)
+	mockSourceFile.EXPECT().Read(blankByteSlice).Times(1).Return(0, nil)
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().CreateFile(testFileName).Times(1).Return(nil, nil)
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
+	copyError := filesystemService.copySingleFileToRootFs(mockSourceFile, "garbage", testFileName)
+	assert.EqualError(t, copyError, "Failed to retrieve file to copy source to: imATestFile, file was nil")
+}
+
+func TestFileSystemServiceImpl_CopySingleFileToRootFs_writeFileError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testFileName := "imATestFile"
+	blankByteSlice := make([]byte, 4096)
+
+	testFileWrapper := clients.NewMockFileWrapper(ctrl)
+	testFileWrapper.EXPECT().Write(nil).Return(0, errors.New("failed to write out to file, no space or something"))
+
+	mockSourceFile := NewMockFile(ctrl)
+	mockSourceFile.EXPECT().Read(blankByteSlice).Times(1).Return(0, nil)
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().CreateFile(testFileName).Times(1).Return(testFileWrapper, nil)
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
+	copyError := filesystemService.copySingleFileToRootFs(mockSourceFile, "garbage", testFileName)
+
+	assert.EqualError(t, copyError, "failed to write out to file, no space or something")
+}
+
+func TestFileSystemServiceImpl_CopySingleFileToRootFs_bytesWrittenDoesntMatchFileSize(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testFileName := "imATestFile"
+	blankByteSlice := make([]byte, 4096)
+
+	testFileWrapper := clients.NewMockFileWrapper(ctrl)
+	testFileWrapper.EXPECT().Write(nil).Times(1).Return(15, nil)
+
+	mockSourceFile := NewMockFile(ctrl)
+	mockSourceFile.EXPECT().Read(blankByteSlice).Times(1).Return(0, nil)
+
+	mockOsClient := clients.NewMockOsClient(ctrl)
+	mockOsClient.EXPECT().CreateFile(testFileName).Times(1).Return(testFileWrapper, nil)
+	testFilesystemService := GetFileSystemService()
+	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
+	copyError := filesystemService.copySingleFileToRootFs(mockSourceFile, "garbage", testFileName)
+
+	assert.EqualError(t, copyError, "Bytes written 15 to imATestFile does not match the number of bytes read 0 from the source file")
 }
