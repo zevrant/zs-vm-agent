@@ -57,14 +57,18 @@ func Setup(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
 
 func initializeDataStore(logger *logrus.Logger, diskService services.DiskService, filesystemService services.FileSystemService) error {
 	diskPath := "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1"
+	logger.Debug("Initializing Data Store")
 	_, statFileError := clients.GetOsClient().StatFile(fmt.Sprintf("%s-part1", diskPath))
-	if statFileError != nil && statFileError.Error() != fmt.Sprintf("stat %s: no such file or directory", diskPath) {
+	logger.Debugf("Stat file attempt made on %s-part1", diskPath)
+	if statFileError != nil && !strings.Contains(statFileError.Error(), fmt.Sprintf("stat %s-part1: no such file or directory", diskPath)) {
 		errorMessage := statFileError.Error()
-		logrus.Debug(errorMessage)
+		logger.Debug(errorMessage)
 		return statFileError
-	} else if statFileError != nil {
-		return statFileError
+	} else if statFileError == nil {
+		return nil
 	}
+
+	logger.Debugf("Successfully located %s", fmt.Sprintf("%s-part1", diskPath))
 
 	dataDrive, getDiskError := diskService.GetDisk(diskPath)
 	if getDiskError != nil {
