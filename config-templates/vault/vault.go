@@ -62,8 +62,8 @@ func initializeDataStore(logger *logrus.Logger, diskService services.DiskService
 		errorMessage := statFileError.Error()
 		logrus.Debug(errorMessage)
 		return statFileError
-	} else if statFileError == nil {
-		return nil
+	} else if statFileError != nil {
+		return statFileError
 	}
 
 	dataDrive, getDiskError := diskService.GetDisk(diskPath)
