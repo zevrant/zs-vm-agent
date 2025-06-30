@@ -14,7 +14,13 @@ func SetupBind9(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
 
 	filesystemService := services.GetFileSystemService()
 
-	copyFilesError := copyFiles(logger, filesystemService)
+	copyFilesError := copyDnsFiles(logger, filesystemService)
+
+	if copyFilesError != nil {
+		return copyFilesError
+	}
+
+	copyFilesError = copyKeepalivedFiles(logger, filesystemService)
 
 	if copyFilesError != nil {
 		return copyFilesError
@@ -31,11 +37,11 @@ func SetupBind9(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
 	return nil
 }
 
-func copyFiles(logger *logrus.Logger, filesystemService services.FileSystemService) error {
+func copyDnsFiles(logger *logrus.Logger, filesystemService services.FileSystemService) error {
 	// create folders
 	createFilesystemFolderError := filesystemService.CreateRootFsDirectory("/etc/named/zones", true, 0750)
 	if createFilesystemFolderError != nil {
-		logger.Errorf("Failed to create zones forlder for named: %s", createFilesystemFolderError.Error())
+		logger.Errorf("Failed to create zones folder for named: %s", createFilesystemFolderError.Error())
 		return createFilesystemFolderError
 	}
 
@@ -71,9 +77,6 @@ func copyFiles(logger *logrus.Logger, filesystemService services.FileSystemServi
 		} else if strings.Contains(fileName, "named.conf.") {
 			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("/%s", fileName), fmt.Sprintf("/etc/named/%s", fileName))
 			setPermissionsError = filesystemService.SetRootFsPermissions("/etc/named.conf", 0640, false)
-		} else if fileName == "keepalived.conf" {
-			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("/%s", fileName), "/etc/keepalived/keepalived.conf")
-			setPermissionsError = filesystemService.SetRootFsPermissions("/etc/keepalived/keepalived.conf", 0600, false)
 		} else if fileName != "vm-config.json" {
 			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("/%s", fileName), fmt.Sprintf("/etc/named/zones/%s", fileName))
 			setPermissionsError = filesystemService.SetRootFsPermissions(fmt.Sprintf("/etc/named/zones/%s", fileName), 0640, false)
@@ -131,6 +134,39 @@ func startServices(logger *logrus.Logger, systemdService services.SystemdService
 			logger.Errorf("%s%s failed to start", strings.ToUpper(service[0:1]), service[1:])
 			return errors.New("named failed to start")
 		}
+	}
+	return nil
+}
+
+func copyKeepalivedFiles(logger *logrus.Logger, filesystemService services.FileSystemService) error {
+	createFilesystemFolderError := filesystemService.CreateRootFsDirectory("/etc/keepalived/", true, 0750)
+	if createFilesystemFolderError != nil {
+		logger.Errorf("Failed to create keepalived folder: %s", createFilesystemFolderError.Error())
+		return createFilesystemFolderError
+	}
+	fs, getFileSystemError := filesystemService.GetBlockFilesystem("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi2")
+
+	if getFileSystemError != nil {
+		return getFileSystemError
+	}
+
+	copyError := filesystemService.CopySingleFileToRootFs(fs, "/keepalived.conf", "/etc/keepalived/keepalived.conf")
+
+	if copyError != nil {
+		logger.Errorf("Failed to copy file %s to root filesystem: %s", "keepalived.conf", copyError)
+		return copyError
+	}
+
+	setOwnerError := filesystemService.SetRootFsOwner("/etc/named.conf", "named", false)
+
+	if setOwnerError != nil {
+		return setOwnerError
+	}
+
+	setPermissionsError := filesystemService.SetRootFsPermissions("/etc/keepalived/keepalived.conf", 0600, false)
+
+	if setPermissionsError != nil {
+		return setPermissionsError
 	}
 	return nil
 }
