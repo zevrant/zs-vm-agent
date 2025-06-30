@@ -22,26 +22,10 @@ func SetupBind9(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
 
 	systemdService := services.GetSystemdService()
 
-	startServiceError := systemdService.StartService("named")
+	startServicesError := startServices(logger, systemdService)
 
-	if startServiceError != nil {
-		return startServiceError
-	}
-
-	systemStatus, getSystemdStatusError := systemdService.GetServiceStatus("named")
-
-	for systemStatus == 0 && getSystemdStatusError != nil {
-		time.Sleep(2 * time.Second)
-		systemStatus, getSystemdStatusError = systemdService.GetServiceStatus("named")
-	}
-
-	if getSystemdStatusError != nil {
-		return getSystemdStatusError
-	}
-
-	if systemStatus == -1 {
-		logger.Error("Named failed to start")
-		return errors.New("named failed to start")
+	if startServicesError != nil {
+		return startServicesError
 	}
 
 	return nil
@@ -87,6 +71,9 @@ func copyFiles(logger *logrus.Logger, filesystemService services.FileSystemServi
 		} else if strings.Contains(fileName, "named.conf.") {
 			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("/%s", fileName), fmt.Sprintf("/etc/named/%s", fileName))
 			setPermissionsError = filesystemService.SetRootFsPermissions("/etc/named.conf", 0640, false)
+		} else if fileName == "keepalived.conf" {
+			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("/%s", fileName), "/etc/keepalived/keepalived.conf")
+			setPermissionsError = filesystemService.SetRootFsPermissions("/etc/keepalived/keepalived.conf", 0600, false)
 		} else if fileName != "vm-config.json" {
 			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("/%s", fileName), fmt.Sprintf("/etc/named/zones/%s", fileName))
 			setPermissionsError = filesystemService.SetRootFsPermissions(fmt.Sprintf("/etc/named/zones/%s", fileName), 0640, false)
@@ -119,5 +106,31 @@ func copyFiles(logger *logrus.Logger, filesystemService services.FileSystemServi
 		return setPermissionsError
 	}
 
+	return nil
+}
+
+func startServices(logger *logrus.Logger, systemdService services.SystemdService) error {
+	for _, service := range []string{"named", "keepalived"} {
+		startServiceError := systemdService.StartService(service)
+
+		if startServiceError != nil {
+			return startServiceError
+		}
+		systemStatus, getSystemdStatusError := systemdService.GetServiceStatus(service)
+
+		for systemStatus == 0 && getSystemdStatusError != nil {
+			time.Sleep(2 * time.Second)
+			systemStatus, getSystemdStatusError = systemdService.GetServiceStatus(service)
+		}
+
+		if getSystemdStatusError != nil {
+			return getSystemdStatusError
+		}
+
+		if systemStatus == -1 {
+			logger.Errorf("%s%s failed to start", strings.ToUpper(service[0:1]), service[1:])
+			return errors.New("named failed to start")
+		}
+	}
 	return nil
 }
