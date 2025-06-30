@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"zs-vm-agent/clients"
 
-	"github.com/diskfs/go-diskfs/filesystem"
 	"github.com/moby/sys/mount"
 	"github.com/sirupsen/logrus"
 )
@@ -24,6 +23,7 @@ type FileSystemService interface {
 	GetFilesystem(diskWrapper clients.DiskWrapper, partition int) (clients.FileSystemWrapper, error)
 	GetBlockFilesystem(devicePath string) (clients.FileSystemWrapper, error)
 	CopyFilesToRootFs(sourceFilesystem clients.FileSystemWrapper, sourcePath string, destPath string, recursive bool) error
+	CopySingleFileToRootFs(sourceFilesystem clients.FileSystemWrapper, sourceFilePath string, destPath string) error
 	ReadFileContents(path string) ([]byte, error)
 	ReadFileContentsFromFilesystem(fs clients.FileSystemWrapper, path string) ([]byte, error)
 	MountFilesystem(deviceLocation string, mountLocatoin string) error
@@ -139,8 +139,6 @@ func (filesystemService *FileSystemServiceImpl) GetBlockFilesystem(devicePath st
 }
 
 func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesystem clients.FileSystemWrapper, sourcePath string, destPath string, recursive bool) error {
-	var sourceFile filesystem.File
-	localSourcePath := sourcePath
 	fileInfos, readSourceError := filesystemService.attemptReadDir(sourceFilesystem, sourcePath)
 
 	if readSourceError != nil && readSourceError.Error() != fmt.Sprintf("error reading directory %s: cannot create directory at %s since it is a file", sourcePath, sourcePath) {
@@ -149,12 +147,11 @@ func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesyst
 	}
 
 	if fileInfos == nil {
-		fileInfo, newDestPath, getFileInfoError := filesystemService.getSingleFileInfo(sourceFilesystem, sourcePath, destPath)
+		fileInfo, _, getFileInfoError := filesystemService.getSingleFileInfo(sourceFilesystem, sourcePath, destPath)
 		if getFileInfoError != nil {
 			return getFileInfoError
 		}
 		fileInfos = []os.FileInfo{fileInfo}
-		localSourcePath, _ = strings.CutPrefix(*newDestPath, "/")
 	}
 	for _, fileInfo := range fileInfos {
 		if fileInfo.IsDir() && (fileInfo.Name() != "." && fileInfo.Name() != "..") {
@@ -163,11 +160,8 @@ func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesyst
 				return copyError
 			}
 		} else if fileInfo.Name() != "." && fileInfo.Name() != ".." {
-			sourceFile, readSourceError = sourceFilesystem.OpenFile(fmt.Sprintf("%s/%s", localSourcePath, fileInfo.Name()), 0)
-			if readSourceError != nil {
-				return readSourceError
-			}
-			copyFileError := filesystemService.copySingleFileToRootFs(sourceFile, fileInfo.Name(), destPath)
+
+			copyFileError := filesystemService.CopySingleFileToRootFs(sourceFilesystem, sourcePath, destPath)
 			if copyFileError != nil {
 				return copyFileError
 			}
@@ -191,7 +185,11 @@ func (filesystemService *FileSystemServiceImpl) attemptReadDir(sourceFilesystem 
 	return fileInfos, nil
 }
 
-func (filesystemService *FileSystemServiceImpl) copySingleFileToRootFs(sourceFile filesystem.File, sourceFileName string, destPath string) error {
+func (filesystemService *FileSystemServiceImpl) CopySingleFileToRootFs(sourceFilesystem clients.FileSystemWrapper, sourceFilePath string, destPath string) error {
+	sourceFile, readSourceError := sourceFilesystem.OpenFile(fmt.Sprintf("%s", sourceFilePath), 0)
+	if readSourceError != nil {
+		return readSourceError
+	}
 	var fileBytes []byte = make([]byte, 4096)
 	var fileBuffer = bytes.Buffer{}
 	bytesRead, readBytesError := sourceFile.Read(fileBytes)
@@ -208,7 +206,7 @@ func (filesystemService *FileSystemServiceImpl) copySingleFileToRootFs(sourceFil
 	}
 	osFile, createFileError := filesystemService.osClient.CreateFile(destPath)
 	if createFileError != nil && strings.Contains(createFileError.Error(), "is a directory") {
-		osFile, createFileError = filesystemService.osClient.CreateFile(fmt.Sprintf("%s/%s", destPath, sourceFileName))
+		osFile, createFileError = filesystemService.osClient.CreateFile(fmt.Sprintf("%s/%s", destPath, sourceFilePath))
 	} else if createFileError != nil {
 		filesystemService.logger.Errorf("Failed to create file to copy source to %s: %s", destPath, createFileError.Error())
 		return createFileError
@@ -250,9 +248,11 @@ func (filesystemService *FileSystemServiceImpl) getSingleFileInfo(system clients
 			sourceDir = fmt.Sprintf("%s/%s", sourceDir, pathPart)
 		}
 	}
-	sourceDir = strings.Replace(sourceDir, "//", "/", -1)
+	filesystemService.logger.Debugf("File info for source dir is %s", sourceDir)
+	for strings.Contains(sourceDir, "//") {
+		sourceDir = strings.Replace(sourceDir, "//", "/", -1)
+	}
 	sourceDirectoryFiles, statFileError := system.ReadDir(sourceDir)
-
 	if statFileError != nil {
 		filesystemService.logger.Errorf("Source directory %s could not be found: %s", sourceDir, statFileError.Error())
 		return nil, nil, statFileError

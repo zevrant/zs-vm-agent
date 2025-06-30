@@ -50,6 +50,7 @@ func main() {
 	logger.Debugf("Retrieved vm details for vm %s", vmDetails.VmId)
 
 	for _, tag := range vmDetails.Tags {
+		logger.Debugf("Parsing tag %s", tag)
 		val, okay := templateMap[tag]
 		if okay {
 			err := val(logger, *vmDetails)
@@ -57,14 +58,6 @@ func main() {
 				os.Exit(-1)
 			}
 			break
-		}
-	}
-
-	val, okay := templateMap["vault"]
-	if okay {
-		err := val(logger, clients.ProxmoxVm{})
-		if err != nil {
-			os.Exit(-1)
 		}
 	}
 }

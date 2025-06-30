@@ -70,18 +70,25 @@ func copyFiles(logger *logrus.Logger, filesystemService services.FileSystemServi
 
 	for _, info := range fileInfos {
 		fileName := info.Name()
+
+		if fileName == "." || fileName == ".." || fileName == "lost+found" {
+			continue
+		}
+
 		var copyError error = nil
 		var setOwnerError error = nil
 		var setPermissionsError error = nil
+		logger.Debugf("Copying file %s", fileName)
+
 		if fileName == "named.conf" {
-			copyError = filesystemService.CopyFilesToRootFs(fs, fmt.Sprintf("/%s", fileName), "/etc/named.conf", false)
+			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("%s", fileName), "/etc/named.conf")
 			setOwnerError = filesystemService.SetRootFsOwner("/etc/named.conf", "named", false)
 			setPermissionsError = filesystemService.SetRootFsPermissions("/etc/named.conf", 0640, false)
 		} else if strings.Contains(fileName, "named.conf.") {
-			copyError = filesystemService.CopyFilesToRootFs(fs, fmt.Sprintf("/%s", fileName), fmt.Sprintf("/etc/named/%s", fileName), false)
+			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("/%s", fileName), fmt.Sprintf("/etc/named/%s", fileName))
 			setPermissionsError = filesystemService.SetRootFsPermissions("/etc/named.conf", 0640, false)
 		} else if fileName != "vm-config.json" {
-			copyError = filesystemService.CopyFilesToRootFs(fs, fmt.Sprintf("/%s", fileName), fmt.Sprintf("/etc/named/zones/%s", fileName), false)
+			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("/%s", fileName), fmt.Sprintf("/etc/named/zones/%s", fileName))
 			setPermissionsError = filesystemService.SetRootFsPermissions(fmt.Sprintf("/etc/named/zones/%s", fileName), 0640, false)
 		}
 
