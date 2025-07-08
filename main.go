@@ -36,35 +36,28 @@ func main() {
 	logger.Info("Initializing Services")
 	services.Initialize(logger)
 
-	//vmDetails, getVmDetailsError := clients.GetInfraConfigMapperClient().GetVmDetailsByHostname()
-	//
-	//if getVmDetailsError != nil {
-	//	logger.Errorf("Failed to retrieve vm details: %s", getVmDetailsError.Error())
-	//	os.Exit(-1)
-	//}
-	//
-	//if vmDetails == nil {
-	//	logger.Error("Failed to retrieve vm details, retrieved nil")
-	//	os.Exit(-1)
-	//}
-	//logger.Debugf("Retrieved vm details for vm %s", vmDetails.VmId)
+	vmDetails, getVmDetailsError := clients.GetInfraConfigMapperClient().GetVmDetailsByHostname()
 
-	//for _, tag := range vmDetails.Tags {
-	//	val, okay := templateMap[tag]
-	//	if okay {
-	//		err := val(logger, *vmDetails)
-	//		if err != nil {
-	//			os.Exit(-1)
-	//		}
-	//		break
-	//	}
-	//}
+	if getVmDetailsError != nil {
+		logger.Errorf("Failed to retrieve vm details: %s", getVmDetailsError.Error())
+		os.Exit(-1)
+	}
 
-	val, okay := templateMap["vault"]
-	if okay {
-		err := val(logger, clients.ProxmoxVm{})
-		if err != nil {
-			os.Exit(-1)
+	if vmDetails == nil {
+		logger.Error("Failed to retrieve vm details, retrieved nil")
+		os.Exit(-1)
+	}
+	logger.Debugf("Retrieved vm details for vm %s", vmDetails.VmId)
+
+	for _, tag := range vmDetails.Tags {
+		logger.Debugf("Parsing tag %s", tag)
+		val, okay := templateMap[tag]
+		if okay {
+			err := val(logger, *vmDetails)
+			if err != nil {
+				os.Exit(-1)
+			}
+			break
 		}
 	}
 }
