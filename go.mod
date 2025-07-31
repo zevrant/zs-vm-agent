@@ -7,6 +7,7 @@ toolchain go1.23.4
 require (
 	github.com/diskfs/go-diskfs v1.6.0
 	github.com/golang/mock v1.6.0
+	github.com/moby/sys/mount v0.3.4
 	github.com/sirupsen/logrus v1.9.4-0.20230606125235-dd1b4c2e81af
 	github.com/stretchr/testify v1.10.0
 )
@@ -17,7 +18,6 @@ require (
 	github.com/elliotwutingfeng/asciiset v0.0.0-20240214025120-24af97c84155 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
-	github.com/moby/sys/mount v0.3.4 // indirect
 	github.com/moby/sys/mountinfo v0.7.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pkg/xattr v0.4.10 // indirect

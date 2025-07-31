@@ -13,10 +13,6 @@ import (
 
 	"github.com/moby/sys/mount"
 	"github.com/sirupsen/logrus"
-
-	"github.com/diskfs/go-diskfs/filesystem"
-	"github.com/moby/sys/mount"
-	"github.com/sirupsen/logrus"
 )
 
 type FileSystemService interface {
