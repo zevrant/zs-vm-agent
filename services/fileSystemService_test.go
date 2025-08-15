@@ -811,7 +811,6 @@ func TestFileSystemServiceImpl_CopySingleFileToRootFs_writeFileError(t *testing.
 	testFilesystemService := GetFileSystemService()
 	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
 	copyError := filesystemService.CopySingleFileToRootFs(mockFileSystem, "garbage", testFileName)
-	``
 	assert.EqualError(t, copyError, "failed to write out to file, no space or something")
 }
 
