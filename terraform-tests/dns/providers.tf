@@ -1,4 +1,8 @@
 terraform {
+  backend "pg" {
+    # conn_str = "postgres://${var.tf_state_user}:${var.tf_state_password}@${var.tf_state_host}:${var.tf_state_port}/cicd_tf_backend"
+    schema_name = "shared_remote_state"
+  }
   required_providers {
     proxmox = {
       source = "app.terraform.io/zevrant-services/proxmox"

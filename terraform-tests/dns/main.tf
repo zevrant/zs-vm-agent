@@ -4,7 +4,7 @@ data minio_s3_object vpc_configurations {
 }
 
 
-resource proxmox_vm hashi-vault-agent-test {
+resource proxmox_vm dns-agent-test {
   name               = var.hostname
   qemu_agent_enabled = true
   cores              = "${var.cpu_cores}"
@@ -39,7 +39,7 @@ resource proxmox_vm hashi-vault-agent-test {
     import_from      = "local"
     //Must be preloaded at this location, full path is /var/lib/vz/images/0/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2
     //Long term recommendation is to use an nfs mount or something that supports RWM
-    import_path      = "0/hashicorp-vault-base-0.0.30.qcow2"
+    import_path      = "0/bind9-base-0.0.43.qcow2"
   }
 
   disk {
@@ -71,4 +71,18 @@ resource random_bytes mac_address_2 {
 }
 resource random_bytes mac_address_3 {
   length = 1
+}
+
+resource null_resource check-health {
+  provisioner "local-exec" {
+    command = "sleep 30; curl --connect-timeout 10 --retry 15 --retry-delay 5 --retry-max-time 3000 http://${split("/", var.ip_address)[0]}:9100/metrics"
+  }
+  depends_on = [proxmox_vm.dns-agent-test]
+}
+
+resource null_resource check_dns {
+  provisioner "local-exec" {
+    command = "dig @${split("/", var.ip_address)[0]} zevrant-services.internal"
+  }
+  depends_on = [null_resource.check-health]
 }
