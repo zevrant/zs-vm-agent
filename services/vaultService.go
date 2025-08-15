@@ -51,7 +51,7 @@ func (vaultService *VaultServiceImpl) UnsealVault(vaultApiUrl string, unsealKeys
 		return getVaultStatusError
 	}
 
-	if vaultStatus.Sealed != false {
+	if !vaultStatus.Sealed {
 		vaultService.logger.Errorf("Vault was not unsealed after uploading all unseal keys")
 		return errors.New("vault was not unsealed after uploading all unseal keys")
 	}

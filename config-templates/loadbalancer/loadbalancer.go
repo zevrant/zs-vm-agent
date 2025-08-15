@@ -22,7 +22,7 @@ type fileMapping struct {
 
 func SetupLoadBalancer(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
 	logger.Info("Setting up as load balancer")
-	var fileSystemService services.FileSystemService = services.GetFileSystemService()
+	var fileSystemService = services.GetFileSystemService()
 
 	filePermissionError := initializeFileSystem(logger, fileSystemService)
 
@@ -184,7 +184,7 @@ func checkServicesHealth(logger *logrus.Logger) error {
 	systemdService := services.GetSystemdService()
 
 	for _, service := range systemServices {
-		var status int = 0
+		var status = 0
 		var getStatusError error
 		for status == 0 {
 			status, getStatusError = systemdService.GetServiceStatus(service)

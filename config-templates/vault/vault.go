@@ -144,7 +144,7 @@ func copyFiles(logger *logrus.Logger, filesystemService services.FileSystemServi
 	logger.Debug("Copying private key")
 	copyFileError = filesystemService.CopyFilesToRootFs(configs, "vault-private.pem", "/etc/vault.d/tls.pem", false)
 
-	return nil
+	return copyFileError
 }
 
 func unsealVault(logger *logrus.Logger, filesystemService services.FileSystemService, configs clients.FileSystemWrapper) error {

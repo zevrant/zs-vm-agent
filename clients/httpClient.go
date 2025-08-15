@@ -41,6 +41,7 @@ func NewClient(host string, username string, password string, verifyTls bool, aL
 		},
 		enableTLSVerification: verifyTls,
 		logger:                aLogger,
+		token:                 "",
 	}
 
 	return &c
@@ -61,7 +62,12 @@ func (c *Client) doRequestWithResponseStatus(req *http.Request, expectedResponse
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(res.Body)
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err

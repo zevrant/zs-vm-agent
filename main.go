@@ -69,10 +69,8 @@ func initLogging() *logrus.Logger {
 	switch logLevel {
 	case "DEBUG":
 		logLevelCode = logrus.DebugLevel
-		break
 	case "ERROR":
 		logLevelCode = logrus.ErrorLevel
-		break
 	}
 	customFormatter := new(logrus.TextFormatter)
 	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
@@ -104,7 +102,7 @@ func retrieveHostname() (*string, error) {
 		}
 		bytesRead, readError = hostnameFile.Read(readBuffer)
 	}
-	hostnameBytes := strings.TrimSpace(string(byteBuffer.Bytes()))
+	hostnameBytes := strings.TrimSpace(byteBuffer.String())
 	return &hostnameBytes, nil
 }
 

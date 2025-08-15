@@ -1,9 +1,11 @@
 package clients
 
 import (
+	"os"
+	"strings"
+
 	"github.com/diskfs/go-diskfs"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 type OsClient interface {
@@ -50,7 +52,10 @@ func (osClient *OsClientImpl) OpenDisk(path string) (DiskWrapper, error) {
 }
 
 func (osClient *OsClientImpl) CreateFile(path string) (FileWrapper, error) {
-	file, getFileError := os.Create(path)
+	sanitizedPath := strings.ReplaceAll(path, "//", "/")
+	osClient.logger.Debugf("Creating file %s", sanitizedPath)
+
+	file, getFileError := os.Create(sanitizedPath)
 
 	if getFileError != nil {
 		return nil, getFileError

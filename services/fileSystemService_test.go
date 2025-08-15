@@ -72,7 +72,7 @@ func TestFileSystemServiceImpl_CreateRootFsDirectory_doesntExist(t *testing.T) {
 		EXPECT().
 		StatFile(gomock.Eq(testPath+"/")).
 		Times(1).
-		Return(nil, errors.New(fmt.Sprintf("stat %s/: no such file or directory", testPath)))
+		Return(nil, fmt.Errorf("stat %s/: no such file or directory", testPath))
 
 	mockOsClient.
 		EXPECT().
@@ -313,8 +313,8 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory(t *testing.
 	mockUserClient := clients.NewMockUserClient(ctrl)
 
 	mockFileInfo := NewMockFileInfo(ctrl)
-	mockFileInfo.EXPECT().IsDir().Times(1).Return(false)
-	mockFileInfo.EXPECT().Name().Times(2).Return(testFile)
+	mockFileInfo.EXPECT().IsDir().Times(2).Return(false)
+	mockFileInfo.EXPECT().Name().Times(1).Return(testFile)
 
 	mockSourceFile := clients.NewMockFileWrapper(ctrl)
 	i := 0
@@ -330,13 +330,13 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory(t *testing.
 	})
 
 	mockFileSystem := clients.NewMockFileSystemWrapper(ctrl)
-	mockFileSystem.EXPECT().ReadDir(gomock.Eq(fmt.Sprintf("%s/%s", testPath, testFile))).Times(1).Return([]os.FileInfo{mockFileInfo}, nil)
+	mockFileSystem.EXPECT().ReadDir(gomock.Eq(testPath)).Times(1).Return([]os.FileInfo{mockFileInfo}, nil)
 	mockFileSystem.EXPECT().OpenFile(gomock.Eq(fmt.Sprintf("%s/%s", testPath, testFile)), gomock.Eq(0)).Return(mockSourceFile, nil)
 
 	testFilesystemService := GetFileSystemService()
 	testFilesystemService.initialize(&logrus.Logger{}, osClient, mockUserClient)
 
-	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, fmt.Sprintf("%s/%s", testPath, testFile), "destPath", false)
+	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, testPath, "destPath", false)
 
 	assert.Nil(t, getFilesystemError)
 
@@ -358,8 +358,8 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory_ErrorCopyin
 	osClient.EXPECT().CreateFile("destPath").Times(1).Return(mockDestFile, nil)
 
 	mockFileInfo := NewMockFileInfo(ctrl)
-	mockFileInfo.EXPECT().IsDir().Times(1).Return(false)
-	mockFileInfo.EXPECT().Name().Times(2).Return(testFile)
+	mockFileInfo.EXPECT().IsDir().Times(2).Return(false)
+	mockFileInfo.EXPECT().Name().Times(1).Return(testFile)
 
 	mockSourceFile := clients.NewMockFileWrapper(ctrl)
 	i := 0
@@ -376,13 +376,13 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory_ErrorCopyin
 	mockUserClient := clients.NewMockUserClient(ctrl)
 
 	mockFileSystem := clients.NewMockFileSystemWrapper(ctrl)
-	mockFileSystem.EXPECT().ReadDir(gomock.Eq(fmt.Sprintf("%s/%s", testPath, testFile))).Times(1).Return([]os.FileInfo{mockFileInfo}, nil)
+	mockFileSystem.EXPECT().ReadDir(gomock.Eq(testPath)).Times(1).Return([]os.FileInfo{mockFileInfo}, nil)
 	mockFileSystem.EXPECT().OpenFile(gomock.Eq(fmt.Sprintf("%s/%s", testPath, testFile)), gomock.Eq(0)).Return(mockSourceFile, nil)
 
 	testFilesystemService := GetFileSystemService()
 	testFilesystemService.initialize(&logrus.Logger{}, osClient, mockUserClient)
 
-	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, fmt.Sprintf("%s/%s", testPath, testFile), "destPath", false)
+	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, testPath, "destPath", false)
 
 	assert.NotNil(t, getFilesystemError)
 	assert.ErrorContainsf(t, getFilesystemError, "does not match the number of bytes read", "Filesystem error should mention incorrect number of bytes being read & written")
@@ -407,20 +407,20 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleDirectory_ErrorOpenin
 	osClient.EXPECT().CreateFile("destPath").Times(0)
 
 	mockFileInfo := NewMockFileInfo(ctrl)
-	mockFileInfo.EXPECT().IsDir().Times(1).Return(false)
-	mockFileInfo.EXPECT().Name().Times(2).Return(testFile)
+	mockFileInfo.EXPECT().IsDir().Times(2).Return(false)
+	mockFileInfo.EXPECT().Name().Times(1).Return(testFile)
 
 	mockSourceFile := clients.NewMockFileWrapper(ctrl)
 	mockSourceFile.EXPECT().Read(gomock.AssignableToTypeOf([]uint8{})).Times(0)
 
 	mockFileSystem := clients.NewMockFileSystemWrapper(ctrl)
-	mockFileSystem.EXPECT().ReadDir(gomock.Eq(fmt.Sprintf("%s/%s", testPath, testFile))).Times(1).Return([]os.FileInfo{mockFileInfo}, nil)
+	mockFileSystem.EXPECT().ReadDir(gomock.Eq(testPath)).Times(1).Return([]os.FileInfo{mockFileInfo}, nil)
 	mockFileSystem.EXPECT().OpenFile(gomock.Eq(fmt.Sprintf("%s/%s", testPath, testFile)), gomock.Eq(0)).Return(nil, errors.New("i failed to open the file"))
 
 	testFilesystemService := GetFileSystemService()
 	testFilesystemService.initialize(&logrus.Logger{}, osClient, mockUserClient)
 
-	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, fmt.Sprintf("%s/%s", testPath, testFile), "destPath", false)
+	getFilesystemError := testFilesystemService.CopyFilesToRootFs(mockFileSystem, testPath, "destPath", false)
 
 	assert.NotNil(t, getFilesystemError)
 	assert.ErrorContainsf(t, getFilesystemError, "i failed to open the file", "test error message about opening a file is not correct")
@@ -496,14 +496,14 @@ func TestFileSystemServiceImpl_CopyFilesToRootFs_CopySingleFile(t *testing.T) {
 
 	singleFileInfo := NewMockFileInfo(ctrl)
 	singleFileInfo.EXPECT().Name().Times(2).Return(testFile)
-	singleFileInfo.EXPECT().IsDir().Times(1).Return(false)
-	singleFileInfo.EXPECT().Name().Times(2).Return(testFile)
+	singleFileInfo.EXPECT().IsDir().Times(2).Return(false)
+	singleFileInfo.EXPECT().Name().Times(1).Return(testFile)
 	mockFileSystem := clients.NewMockFileSystemWrapper(ctrl)
 	mockFileSystem.EXPECT().ReadDir(gomock.Any()).Times(2).DoAndReturn(func(sourceDir string) ([]os.FileInfo, error) {
 		if sourceDir == "/" {
 			return []os.FileInfo{singleFileInfo}, nil
 		}
-		return nil, nil
+		return nil, fmt.Errorf("error reading directory %s: cannot create directory at %s since it is a file", testFile, testFile)
 	})
 	mockFileSystem.EXPECT().OpenFile(gomock.Eq(testFile), gomock.Eq(0)).Return(mockSourceFile, nil)
 
@@ -789,7 +789,7 @@ func TestFileSystemServiceImpl_CopySingleFileToRootFs_nilFile(t *testing.T) {
 	testFilesystemService := GetFileSystemService()
 	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
 	copyError := filesystemService.CopySingleFileToRootFs(mockFileSystem, "garbage", testFileName)
-	assert.EqualError(t, copyError, "Failed to retrieve file to copy source to: imATestFile, file was nil")
+	assert.EqualError(t, copyError, "failed to retrieve file to copy source garbage to: imATestFile, file was nil")
 }
 
 func TestFileSystemServiceImpl_CopySingleFileToRootFs_writeFileError(t *testing.T) {
@@ -811,7 +811,7 @@ func TestFileSystemServiceImpl_CopySingleFileToRootFs_writeFileError(t *testing.
 	testFilesystemService := GetFileSystemService()
 	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
 	copyError := filesystemService.CopySingleFileToRootFs(mockFileSystem, "garbage", testFileName)
-
+	``
 	assert.EqualError(t, copyError, "failed to write out to file, no space or something")
 }
 
@@ -835,5 +835,5 @@ func TestFileSystemServiceImpl_CopySingleFileToRootFs_bytesWrittenDoesntMatchFil
 	testFilesystemService.initialize(&logrus.Logger{}, mockOsClient, nil)
 	copyError := filesystemService.CopySingleFileToRootFs(mockFileSystem, "garbage", testFileName)
 
-	assert.EqualError(t, copyError, "Bytes written 15 to imATestFile does not match the number of bytes read 0 from the source file")
+	assert.EqualError(t, copyError, "bytes written 15 to imATestFile does not match the number of bytes read 0 from the source file")
 }

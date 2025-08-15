@@ -3,11 +3,12 @@ package dns
 import (
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"strings"
 	"time"
 	"zs-vm-agent/clients"
 	"zs-vm-agent/services"
+
+	"github.com/sirupsen/logrus"
 )
 
 func SetupBind9(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
@@ -71,7 +72,7 @@ func copyDnsFiles(logger *logrus.Logger, filesystemService services.FileSystemSe
 		logger.Debugf("Copying file %s", fileName)
 
 		if fileName == "named.conf" {
-			copyError = filesystemService.CopySingleFileToRootFs(fs, fmt.Sprintf("%s", fileName), "/etc/named.conf")
+			copyError = filesystemService.CopySingleFileToRootFs(fs, fileName, "/etc/named.conf")
 			setOwnerError = filesystemService.SetRootFsOwner("/etc/named.conf", "named", false)
 			setPermissionsError = filesystemService.SetRootFsPermissions("/etc/named.conf", 0640, false)
 		} else if strings.Contains(fileName, "named.conf.") {
