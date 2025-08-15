@@ -139,11 +139,16 @@ func (filesystemService *FileSystemServiceImpl) GetBlockFilesystem(devicePath st
 }
 
 func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesystem clients.FileSystemWrapper, sourcePath string, destPath string, recursive bool) error {
+	filesystemService.logger.Infof("Copying %s to %s", sourcePath, destPath)
 	fileInfos, readSourceError := filesystemService.attemptReadDir(sourceFilesystem, sourcePath)
-
-	if readSourceError != nil && readSourceError.Error() != fmt.Sprintf("error reading directory %s: cannot create directory at %s since it is a file", sourcePath, sourcePath) {
-		filesystemService.logger.Debugf("Failed to read source file at %s, cannot continue copy operation", sourcePath)
-		return readSourceError
+	isSourceADir := false
+	if readSourceError != nil {
+		if readSourceError.Error() != fmt.Sprintf("error reading directory %s: cannot create directory at %s since it is a file", sourcePath, sourcePath) {
+			isSourceADir = true
+		} else {
+			filesystemService.logger.Debugf("Failed to read source file at %s, cannot continue copy operation", sourcePath)
+			return readSourceError
+		}
 	}
 
 	if fileInfos == nil {
@@ -154,20 +159,31 @@ func (filesystemService *FileSystemServiceImpl) CopyFilesToRootFs(sourceFilesyst
 		fileInfos = []os.FileInfo{fileInfo}
 	}
 	for _, fileInfo := range fileInfos {
-		if fileInfo.IsDir() && (fileInfo.Name() != "." && fileInfo.Name() != "..") {
+		filesystemService.logger.Debugf("Processing %s", fileInfo.Name())
+		filesystemService.logger.Debugf("Is Directory? %v", fileInfo.IsDir())
+		//filesystemService.logger.Debugf("Processing %s", fileInfo.Name())
+		//filesystemService.logger.Debugf("Processing %s", fileInfo.Name())
+
+		if fileInfo.IsDir() && fileInfo.Name() != "." && fileInfo.Name() != ".." {
+			filesystemService.logger.Debugf("Starting copy for directory %s", fileInfo.Name())
 			copyError := filesystemService.CopyFilesToRootFs(sourceFilesystem, fmt.Sprintf("%s/%s", sourcePath, fileInfo.Name()), fmt.Sprintf("%s/%s", destPath, fileInfo.Name()), recursive)
 			if copyError != nil {
 				return copyError
 			}
-		} else if fileInfo.Name() != "." && fileInfo.Name() != ".." {
 
-			copyFileError := filesystemService.CopySingleFileToRootFs(sourceFilesystem, sourcePath, destPath)
+		} else if fileInfo.Name() != "." && fileInfo.Name() != ".." {
+			filesystemService.logger.Debugf("Starting copy for file %s", fileInfo.Name())
+			filePath := sourcePath
+			if isSourceADir {
+				filePath = sourcePath + fileInfo.Name()
+			}
+			filesystemService.logger.Debugf("Copying filepath %s", filePath)
+			copyFileError := filesystemService.CopySingleFileToRootFs(sourceFilesystem, filePath, destPath)
 			if copyFileError != nil {
 				return copyFileError
 			}
-			filesystemService.logger.Debugf("Copied %s to %s", sourcePath, destPath)
 		}
-
+		filesystemService.logger.Debugf("Copied %s to %s", sourcePath, destPath)
 	}
 
 	return nil
@@ -188,8 +204,11 @@ func (filesystemService *FileSystemServiceImpl) attemptReadDir(sourceFilesystem 
 func (filesystemService *FileSystemServiceImpl) CopySingleFileToRootFs(sourceFilesystem clients.FileSystemWrapper, sourceFilePath string, destPath string) error {
 	sourceFile, readSourceError := sourceFilesystem.OpenFile(fmt.Sprintf("%s", sourceFilePath), 0)
 	if readSourceError != nil {
+		filesystemService.logger.Errorf("Failed to open file %s: %s", sourceFilePath, readSourceError.Error())
+		panic(readSourceError)
 		return readSourceError
 	}
+	filesystemService.logger.Debugf("File %s opened", sourceFilePath)
 	var fileBytes []byte = make([]byte, 4096)
 	var fileBuffer = bytes.Buffer{}
 	bytesRead, readBytesError := sourceFile.Read(fileBytes)
@@ -233,6 +252,7 @@ func (filesystemService *FileSystemServiceImpl) CopySingleFileToRootFs(sourceFil
 }
 
 func (filesystemService *FileSystemServiceImpl) getSingleFileInfo(system clients.FileSystemWrapper, sourcePath string, destPath string) (os.FileInfo, *string, error) {
+	filesystemService.logger.Debugf("Getting file info for %s", sourcePath)
 	pathParts := strings.Split(destPath, "/")
 	localDestPath := ""
 	for i, part := range pathParts {
@@ -240,6 +260,7 @@ func (filesystemService *FileSystemServiceImpl) getSingleFileInfo(system clients
 			localDestPath = fmt.Sprintf("%s/%s", localDestPath, part)
 		}
 	}
+	filesystemService.logger.Debugf("Local dest path is %s", localDestPath)
 	localDestPath = strings.Replace(localDestPath, "//", "/", -1)
 	sourceParts := strings.Split(sourcePath, "/")
 	sourceDir := "/"

@@ -3,9 +3,10 @@ package loadbalancer
 import (
 	"encoding/json"
 	"errors"
-	"github.com/sirupsen/logrus"
 	"zs-vm-agent/clients"
 	"zs-vm-agent/services"
+
+	"github.com/sirupsen/logrus"
 )
 
 var systemServices = [...]string{
@@ -23,10 +24,10 @@ func SetupLoadBalancer(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error
 	logger.Info("Setting up as load balancer")
 	var fileSystemService services.FileSystemService = services.GetFileSystemService()
 
-	filePermissionError := initializeFileSystem(fileSystemService)
+	filePermissionError := initializeFileSystem(logger, fileSystemService)
 
 	if filePermissionError != nil {
-		return nil
+		return filePermissionError
 	}
 	logger.Info("Files successfully loaded")
 
@@ -51,8 +52,10 @@ func SetupLoadBalancer(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error
 	return nil
 }
 
-func initializeFileSystem(filesystemService services.FileSystemService) error {
+func initializeFileSystem(logger *logrus.Logger, filesystemService services.FileSystemService) error {
 	fs, getFileSystemError := filesystemService.GetBlockFilesystem("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1")
+
+	logger.Info("Creating directories")
 
 	if getFileSystemError != nil {
 		return getFileSystemError
@@ -65,18 +68,21 @@ func initializeFileSystem(filesystemService services.FileSystemService) error {
 	}
 
 	for directory, permissions := range dirs {
+		logger.Debugf("Creating directory %s", directory)
 		directoryCreationError := filesystemService.CreateRootFsDirectory(directory, true, permissions)
 
 		if directoryCreationError != nil {
 			return directoryCreationError
 		}
-
+		logger.Debugf("Setting root fs owner for %s to haproxy", directory)
 		setOwnerError := filesystemService.SetRootFsOwner(directory, "haproxy", false)
 
 		if setOwnerError != nil {
 			return setOwnerError
 		}
 	}
+
+	logger.Info("Copying config files...")
 
 	copyFilesError := copyFiles(fs, map[string]fileMapping{
 		"haproxy.cfg": {
@@ -97,7 +103,7 @@ func initializeFileSystem(filesystemService services.FileSystemService) error {
 			path:        "/tmp/vm-config.json",
 			permissions: 0400,
 		},
-	})
+	}, logger)
 
 	if copyFilesError != nil {
 		return copyFilesError
@@ -114,7 +120,7 @@ func initializeFileSystem(filesystemService services.FileSystemService) error {
 			path:        "/etc/keepalived/keepalived.conf",
 			permissions: 0600,
 		},
-	})
+	}, logger)
 
 	if copyFilesError != nil {
 		return copyFilesError
@@ -137,25 +143,22 @@ func initializeFileSystem(filesystemService services.FileSystemService) error {
 	return nil
 }
 
-func copyFiles(sourceFs clients.FileSystemWrapper, sources map[string]fileMapping) error {
+func copyFiles(sourceFs clients.FileSystemWrapper, sources map[string]fileMapping, logger *logrus.Logger) error {
 	filesystemService := services.GetFileSystemService()
 	for sourceFile, destFile := range sources {
+		logger.Debugf("Triggering copy for %s to %s", sourceFile, destFile.path)
 		copyError := filesystemService.CopyFilesToRootFs(sourceFs, sourceFile, destFile.path, true)
 		if copyError != nil {
 			return copyError
 		}
+		logger.Debugf("Setting permissions for %s", sourceFile)
 		setPermissionsError := filesystemService.SetRootFsPermissions(destFile.path, destFile.directoryFilesPermissions, true)
 
 		if setPermissionsError != nil {
+			logger.Error(setPermissionsError.Error())
 			return setPermissionsError
 		}
-
-		setPermissionsError = filesystemService.SetRootFsPermissions(destFile.path, destFile.permissions, false)
-
-		if setPermissionsError != nil {
-			return setPermissionsError
-		}
-
+		logger.Debugf("Finished copy for %s", sourceFile)
 	}
 	return nil
 }

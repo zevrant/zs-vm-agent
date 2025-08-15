@@ -66,7 +66,6 @@ func initLogging() *logrus.Logger {
 	log := logrus.New()
 	logLevel := strings.ToUpper(os.Getenv("LOG_LEVEL"))
 	logLevelCode := logrus.InfoLevel
-
 	switch logLevel {
 	case "DEBUG":
 		logLevelCode = logrus.DebugLevel
@@ -75,7 +74,6 @@ func initLogging() *logrus.Logger {
 		logLevelCode = logrus.ErrorLevel
 		break
 	}
-
 	customFormatter := new(logrus.TextFormatter)
 	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
 	customFormatter.FullTimestamp = true
