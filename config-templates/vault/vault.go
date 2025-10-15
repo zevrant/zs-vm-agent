@@ -17,6 +17,19 @@ func Setup(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
 	systemdService := services.GetSystemdService()
 
 	// scsi-0QEMU_QEMU_HARDDISK_drive-scsi2
+	configDrive, getFirstFileSystemError := filesystemService.GetBlockFilesystem("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1")
+
+	if getFirstFileSystemError != nil && strings.Contains(getFirstFileSystemError.Error(), "unknown filesystem on partition") {
+		filesystemCreationError := filesystemService.CreateXfsFileSystem("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1")
+		if filesystemCreationError != nil {
+			logger.Errorf("Failed to create filesystem on /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1, Error:  %s", filesystemCreationError.Error())
+			return filesystemCreationError
+		}
+	} else if getFirstFileSystemError != nil {
+		logger.Errorf("Failed to get filesystem containing vault data, cannot continue: %s", getFirstFileSystemError.Error())
+		return getFirstFileSystemError
+	}
+	// scsi-0QEMU_QEMU_HARDDISK_drive-scsi2
 	configDrive, getFileSystemError := filesystemService.GetBlockFilesystem("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi2")
 
 	if getFileSystemError != nil {
