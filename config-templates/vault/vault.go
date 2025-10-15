@@ -64,8 +64,6 @@ func initializeDataStore(logger *logrus.Logger, diskService services.DiskService
 		errorMessage := statFileError.Error()
 		logger.Debug(errorMessage)
 		return statFileError
-	} else if statFileError == nil {
-		return nil
 	}
 
 	logger.Debugf("Successfully located %s", fmt.Sprintf("%s-part1", diskPath))
@@ -122,6 +120,12 @@ func initializeDataStore(logger *logrus.Logger, diskService services.DiskService
 	if mountError != nil {
 		return mountError
 	}
+
+	setFolderOwnerError := filesystemService.SetRootFsOwner("/opt/vault", "vault", true)
+	if setFolderOwnerError != nil {
+		return setFolderOwnerError
+	}
+
 	return nil
 }
 
