@@ -21,6 +21,7 @@ var templateMap = map[string]func(logger *logrus.Logger, vmDetails clients.Proxm
 	"dns":            dns.SetupBind9,
 	"vault":          vault.Setup,
 	"k8s-controller": k8s.ControllerSetup,
+	"k8s-worker":     k8s.WorkerSetup,
 }
 
 func main() {

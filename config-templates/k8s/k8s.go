@@ -1,10 +1,12 @@
 package k8s
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"os/exec"
 	"strings"
 	"time"
 	"zs-vm-agent/clients"
@@ -158,7 +160,6 @@ func loadConfig(logger *logrus.Logger) (*k8sConfig, error) {
 
 	var parsedConfig k8sConfig
 
-	logger.Debug(string(k8sConfigBytes))
 	logger.Debug("Reading Json")
 	jsonProcessingError := json.Unmarshal(k8sConfigBytes, &parsedConfig)
 
@@ -170,4 +171,74 @@ func loadConfig(logger *logrus.Logger) (*k8sConfig, error) {
 
 	logger.Debug("Config load complete!")
 	return &parsedConfig, nil
+}
+
+func generateK8sCaHash(logger *logrus.Logger) (*string, error) {
+	keyLoadError := loadPublicKey(logger)
+
+	if keyLoadError != nil {
+		return nil, keyLoadError
+	}
+
+	derData, pemConvertError := convertPenToDer(logger)
+
+	if pemConvertError != nil {
+		return nil, pemConvertError
+	}
+
+	sum := strings.ReplaceAll(fmt.Sprintf("%x", sha256.Sum256(derData)), "\"", "")
+	return &sum, nil
+}
+
+func loadPublicKey(logger *logrus.Logger) error {
+	var hashArgs = []string{
+		"x509",
+		"-in",
+		"/etc/kubernetes/pki/ca.crt",
+		"-pubkey",
+		"-nocert",
+		"-out",
+		"/tmp/ca-pub.key",
+	}
+
+	logger.Debugf("/bin/openssl %s", strings.Join(hashArgs, " "))
+	command := exec.Command("/bin/openssl", hashArgs...)
+
+	outputText, commandExecutionError := command.CombinedOutput()
+
+	for _, line := range strings.Split(string(outputText), "\n") {
+		logger.Info(line)
+	}
+
+	if commandExecutionError != nil {
+		logger.Errorf("Failed to load ca cert: %s", commandExecutionError.Error())
+		return commandExecutionError
+	}
+	return nil
+}
+
+func convertPenToDer(logger *logrus.Logger) ([]byte, error) {
+	var hashArgs = []string{
+		"pkey",
+		"-pubin",
+		"-in",
+		"/tmp/ca-pub.key",
+		"-outform",
+		"DER",
+	}
+
+	logger.Debugf("/bin/openssl %s", strings.Join(hashArgs, " "))
+	command := exec.Command("/bin/openssl", hashArgs...)
+
+	outputText, commandExecutionError := command.CombinedOutput()
+
+	for _, line := range strings.Split(string(outputText), "\n") {
+		logger.Info(line)
+	}
+
+	if commandExecutionError != nil {
+		logger.Errorf("Failed to load ca cert: %s", commandExecutionError.Error())
+		return nil, commandExecutionError
+	}
+	return outputText, nil
 }
