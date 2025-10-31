@@ -26,7 +26,8 @@ type FileSystemService interface {
 	CopySingleFileToRootFs(sourceFilesystem clients.FileSystemWrapper, sourceFilePath string, destPath string) error
 	ReadFileContents(path string) ([]byte, error)
 	ReadFileContentsFromFilesystem(fs clients.FileSystemWrapper, path string) ([]byte, error)
-	MountFilesystem(deviceLocation string, mountLocatoin string) error
+	WriteFileContents(path string, data []byte, permissions uint16) error
+	MountFilesystem(deviceLocation string, mountLocation string) error
 	CreateXfsFileSystem(partitionPath string) error
 }
 
@@ -385,6 +386,19 @@ func (filesystemService *FileSystemServiceImpl) ReadFileContentsFromFilesystem(f
 	}
 
 	return byteBuffer.Bytes(), nil
+}
+
+func (filesystemService *FileSystemServiceImpl) WriteFileContents(path string, data []byte, permissions uint16) error {
+	filesystemService.logger.Debugf("Reading File at %s", path)
+
+	writeError := os.WriteFile(path, data, os.FileMode(permissions))
+
+	if writeError != nil {
+		filesystemService.logger.Errorf("Failed to write provided data to file: %s", writeError.Error())
+		return writeError
+	}
+
+	return nil
 }
 
 func (filesystemService *FileSystemServiceImpl) MountFilesystem(deviceLocation string, mountLocation string) error {
