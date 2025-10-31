@@ -26,7 +26,7 @@ type FileSystemService interface {
 	CopySingleFileToRootFs(sourceFilesystem clients.FileSystemWrapper, sourceFilePath string, destPath string) error
 	ReadFileContents(path string) ([]byte, error)
 	ReadFileContentsFromFilesystem(fs clients.FileSystemWrapper, path string) ([]byte, error)
-	MountFilesystem(deviceLocation string, mountLocatoin string) error
+	MountFilesystem(deviceLocation string, mountLocation string) error
 	CreateXfsFileSystem(partitionPath string) error
 }
 

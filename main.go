@@ -7,6 +7,7 @@ import (
 	"time"
 	"zs-vm-agent/clients"
 	"zs-vm-agent/config-templates/dns"
+	"zs-vm-agent/config-templates/k8s"
 	"zs-vm-agent/config-templates/loadbalancer"
 	"zs-vm-agent/config-templates/vault"
 	"zs-vm-agent/services"
@@ -16,9 +17,10 @@ import (
 )
 
 var templateMap = map[string]func(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error{
-	"loadbalancer": loadbalancer.SetupLoadBalancer,
-	"dns":          dns.SetupBind9,
-	"vault":        vault.Setup,
+	"loadbalancer":   loadbalancer.SetupLoadBalancer,
+	"dns":            dns.SetupBind9,
+	"vault":          vault.Setup,
+	"k8s-controller": k8s.ControllerSetup,
 }
 
 func main() {
