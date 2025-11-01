@@ -110,6 +110,7 @@ func k8sInit(logger *logrus.Logger, kubeConfig *k8sConfig) error {
 		"--token",
 		kubeConfig.K8sInitToken,
 	}
+	logger.Info("Initializing Kubernetes Cluster, this may take awhile...")
 	logger.Debugf("/usr/bin/kubeadm %s", strings.Replace(strings.Join(kubeInitArgs, " "), kubeConfig.K8sInitToken, "XXXXXXX", 1))
 	command := exec.Command("/usr/bin/kubeadm", kubeInitArgs...)
 
