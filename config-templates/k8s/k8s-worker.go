@@ -66,9 +66,7 @@ func k8sWorkerJoin(logger *logrus.Logger, kubeConfig *k8sConfig) error {
 
 	outputText, commandExecutionError := command.CombinedOutput()
 
-	for _, line := range strings.Split(string(outputText), "\n") {
-		logger.Info(line)
-	}
+	logger.Info(outputText)
 
 	if commandExecutionError != nil {
 		logger.Errorf("Failed to join kubernetes cluster controller: %s", commandExecutionError.Error())
