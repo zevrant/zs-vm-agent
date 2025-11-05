@@ -10,6 +10,7 @@ module "test_k8s_cluster" {
     "10.1.0.14/24" : {
       controller_cpu    = 2
       controller_memory = 4096 # Controller RAM in MB
+      mass_storage_name = "local-zfs"
       node_name         = "proxmox-03"
       os_storage_name   = "local-zfs"
       os_image_location = "0/k8s-base-0.0.12.qcow2" # should look like 0/k8s-base-xx.xx.xx.qcow2
@@ -17,17 +18,18 @@ module "test_k8s_cluster" {
       vm_id             = 8000
     },
   }
-  k8s_ca_init_private_key       = tls_private_key.zs_k8s_ca_private_key.private_key_pem
-  k8s_ca_init_public_cert       = tls_self_signed_cert.zs-k8s_ca_cert.cert_pem
-  mass_storage_name             = "local-zfs"
-  network_nameserver            = "10.0.0.8"
-  os_disk_size                  = 50
-  pod_network_cidr              = "10.5.0.0/24"
-  service_network_cidr          = "10.6.0.0/24"
-  worker_ip_addresses           = {
+  k8s_ca_init_private_key = tls_private_key.zs_k8s_ca_private_key.private_key_pem
+  k8s_ca_init_public_cert = tls_self_signed_cert.zs-k8s_ca_cert.cert_pem
+
+  network_nameserver   = "10.0.0.8"
+  os_disk_size         = 50
+  pod_network_cidr     = "10.5.0.0/16"
+  service_network_cidr = "10.6.0.0/16"
+  worker_ip_addresses = {
     "10.1.0.15/24" : {
       controller_cpu    = 2
       controller_memory = 4096 # Controller RAM in MB
+      mass_storage_name = "local-zfs"
       node_name         = "proxmox-03"
       os_storage_name   = "local-zfs"
       os_image_location = "0/k8s-base-0.0.12.qcow2" # should look like 0/k8s-base-xx.xx.xx.qcow2
@@ -36,4 +38,11 @@ module "test_k8s_cluster" {
     }
   }
   worker_container_storage_size = 50
+  additional_disks = [
+    {
+      size           = 100
+      storage_type   = "mass_storage"
+      mount_location = "/var/lib/longhorn"
+    }
+  ]
 }

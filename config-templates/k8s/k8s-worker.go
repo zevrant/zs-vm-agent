@@ -31,6 +31,18 @@ func WorkerSetup(logger *logrus.Logger, vmDetails clients.ProxmoxVm) error {
 		return certLoadError
 	}
 
+	driveMappings = make(map[string]string)
+
+	for _, volume := range kubeConfig.AdditionalVolumes {
+		driveMappings[fmt.Sprintf("/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi%d", volume.Order)] = volume.StorageLocation
+	}
+
+	additionalVolumesMountError := mountDrives(logger)
+
+	if additionalVolumesMountError != nil {
+		return additionalVolumesMountError
+	}
+
 	return k8sWorkerJoin(logger, kubeConfig)
 }
 

@@ -1,8 +1,6 @@
 variable "ca_valid_days" {
-  default = 365
+  default = 1825
 }
-
-
 
 # Generate a private key resource using the ECDSA algorithm
 resource "tls_private_key" "zs_k8s_ca_private_key" {

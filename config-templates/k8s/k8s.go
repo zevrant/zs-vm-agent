@@ -15,15 +15,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type AdditionalVolume struct {
+	StorageLocation string `json:"storageLocation"`
+	Order           int    `json:"order"`
+}
+
 type k8sConfig struct {
-	ControlPlaneEndpoint  string   `json:"controlPlaneEndpoint"`
-	ControllerIpAddresses []string `json:"controllerIpAddresses"`
-	K8sInitToken          string   `json:"k8sInitToken"`
-	K8sCaInitPrivateKey   string   `json:"k8sCaInitPrivateKey"`
-	K8sCaInitPublicCert   string   `json:"k8sCaInitPublicCert"`
-	PodNetworkCidr        string   `json:"podNetworkCidr"`
-	ServiceNetworkCidr    string   `json:"serviceNetworkCidr"`
-	WorkerIpAddresses     []string `json:"workerIpAddresses"`
+	ControlPlaneEndpoint  string             `json:"controlPlaneEndpoint"`
+	ControllerIpAddresses []string           `json:"controllerIpAddresses"`
+	K8sInitToken          string             `json:"k8sInitToken"`
+	K8sCaInitPrivateKey   string             `json:"k8sCaInitPrivateKey"`
+	K8sCaInitPublicCert   string             `json:"k8sCaInitPublicCert"`
+	PodNetworkCidr        string             `json:"podNetworkCidr"`
+	ServiceNetworkCidr    string             `json:"serviceNetworkCidr"`
+	WorkerIpAddresses     []string           `json:"workerIpAddresses"`
+	AdditionalVolumes     []AdditionalVolume `json:"additionalVolumes"`
 }
 
 var driveMappings = map[string]string{
