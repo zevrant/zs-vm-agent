@@ -116,7 +116,7 @@ func k8sInit(logger *logrus.Logger, kubeConfig *k8sConfig) error {
 
 	outputText, commandExecutionError := command.CombinedOutput()
 
-	logger.Info(outputText)
+	logger.Info(string(outputText))
 
 	if commandExecutionError != nil {
 		logger.Errorf("Failed to initialize kubernetes cluster controller: %s", commandExecutionError.Error())
@@ -155,7 +155,7 @@ func k8sControllerJoin(logger *logrus.Logger, kubeConfig *k8sConfig) error {
 
 	outputText, commandExecutionError := command.CombinedOutput()
 
-	logger.Info(outputText)
+	logger.Info(string(outputText))
 
 	if commandExecutionError != nil {
 		logger.Errorf("Failed to join kubernetes cluster controller: %s", commandExecutionError.Error())

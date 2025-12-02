@@ -74,7 +74,7 @@ func (selinuxService *SeLinuxServiceImpl) ChangeContext(path string, u string, r
 
 	outputText, executeCommandError := command.CombinedOutput()
 
-	selinuxService.logger.Info(outputText)
+	selinuxService.logger.Info(string(outputText))
 
 	if executeCommandError != nil {
 		selinuxService.logger.Errorf("Failed to chcon on %s: %s", path, executeCommandError.Error())
