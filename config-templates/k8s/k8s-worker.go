@@ -73,12 +73,12 @@ func k8sWorkerJoin(logger *logrus.Logger, kubeConfig *k8sConfig) error {
 		"--token",
 		kubeConfig.K8sInitToken,
 	}
-	logger.Debugf("/usr/bin/kubeadm %s", strings.Replace(strings.Join(kubeInitArgs, " "), kubeConfig.K8sInitToken, "XXXXXXX", 1))
+	logger.Infof("/usr/bin/kubeadm %s", strings.Replace(strings.Join(kubeInitArgs, " "), kubeConfig.K8sInitToken, "XXXXXXX", 1))
 	command := exec.Command("/usr/bin/kubeadm", kubeInitArgs...)
 
 	outputText, commandExecutionError := command.CombinedOutput()
 
-	logger.Info(outputText)
+	logger.Info(string(outputText))
 
 	if commandExecutionError != nil {
 		logger.Errorf("Failed to join kubernetes cluster controller: %s", commandExecutionError.Error())
